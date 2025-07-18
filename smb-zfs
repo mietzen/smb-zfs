@@ -1,0 +1,1683 @@
+#!/bin/bash
+
+# smb-zfs - Complete ZFS Samba Management Tool
+# Version: 1.0
+# Author: System Administrator
+# Description: Unified tool for managing Samba shares on ZFS with state tracking
+
+set -e
+
+# Global variables
+SCRIPT_NAME="smb-zfs"
+STATE_FILE="/etc/smb-zfs.state"
+SMB_CONF="/etc/samba/smb.conf"
+AVAHI_SMB_SERVICE="/etc/avahi/services/smb.service"
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Print functions
+print_status() {
+    echo -e "${GREEN}[INFO]${NC} $1"
+}
+
+print_warning() {
+    echo -e "${YELLOW}[WARNING]${NC} $1"
+}
+
+print_error() {
+    echo -e "${RED}[ERROR]${NC} $1"
+}
+
+print_header() {
+    echo -e "${BLUE}[${1}]${NC} $2"
+}
+
+# Check if running as root
+check_root() {
+    if [[ $EUID -ne 0 ]]; then
+        print_error "This script must be run as root"
+        exit 1
+    fi
+}
+
+# Show usage
+show_usage() {
+    cat << EOF
+Usage: $SCRIPT_NAME COMMAND [OPTIONS]
+
+Commands:
+  install <POOL> [--macos]           Setup Samba with Avahi and ZFS integration
+  create user <USER> [--shell]      Create Linux and SMB user with ZFS home
+  create share <SHARE>               Create ZFS dataset and Samba share
+  create group <GROUP>               Create new user group
+  modify share <SHARE>               Modify existing share configuration
+  modify group <GROUP>               Modify existing group membership
+  modify setup                       Modify server configuration
+  list users                         List users created by this tool
+  list shares                        List shares created by this tool
+  list groups                        List groups created by this tool
+  delete user <USER>                 Remove user and cleanup
+  delete share <SHARE>               Remove share and cleanup
+  delete group <GROUP>               Remove group and cleanup
+  uninstall                          Remove all configuration and cleanup
+
+Options:
+  --macos                           Optimize for macOS compatibility
+  --shell                           Allow shell access for user creation
+  -h, --help                        Show this help message
+
+Examples:
+  $SCRIPT_NAME install tank --macos
+  $SCRIPT_NAME create user john --shell
+  $SCRIPT_NAME create share projects
+  $SCRIPT_NAME list users
+  $SCRIPT_NAME delete user john
+
+State file: $STATE_FILE
+EOF
+}
+
+# Initialize state file
+init_state() {
+    if [[ ! -f "$STATE_FILE" ]]; then
+        cat > "$STATE_FILE" << 'EOF'
+{
+  "version": "1.0",
+  "initialized": false,
+  "zfs_pool": "",
+  "server_name": "",
+  "workgroup": "",
+  "macos_optimized": false,
+  "users": {},
+  "shares": {},
+  "groups": {}
+}
+EOF
+        print_status "Initialized state file: $STATE_FILE"
+    fi
+}
+
+# Read state
+read_state() {
+    if [[ -f "$STATE_FILE" ]]; then
+        cat "$STATE_FILE"
+    else
+        echo "{}"
+    fi
+}
+
+# Write state
+write_state() {
+    local state="$1"
+    echo "$state" > "$STATE_FILE"
+    chmod 600 "$STATE_FILE"
+}
+
+# Get state value using jq
+get_state_value() {
+    local key="$1"
+    local default="$2"
+    local state
+    state=$(read_state)
+    echo "$state" | jq -r ".$key // \"$default\""
+}
+
+# Set state value using jq
+set_state_value() {
+    local key="$1"
+    local value="$2"
+    local state
+    state=$(read_state)
+    state=$(echo "$state" | jq ".$key = \"$value\"")
+    write_state "$state"
+}
+
+# Add to state object
+add_to_state_object() {
+    local object="$1"
+    local key="$2"
+    local value="$3"
+    local state
+    state=$(read_state)
+    state=$(echo "$state" | jq ".$object[\"$key\"] = $value")
+    write_state "$state"
+}
+
+# Remove from state object
+remove_from_state_object() {
+    local object="$1"
+    local key="$2"
+    local state
+    state=$(read_state)
+    state=$(echo "$state" | jq "del(.$object[\"$key\"])")
+    write_state "$state"
+}
+
+# Get state object keys
+get_state_object_keys() {
+    local object="$1"
+    local state
+    state=$(read_state)
+    echo "$state" | jq -r ".$object | keys[]" 2>/dev/null || true
+}
+
+# Check if initialized
+check_initialized() {
+    local initialized
+    initialized=$(get_state_value "initialized" "false")
+    if [[ "$initialized" != "true" ]]; then
+        print_error "System not initialized. Run '$SCRIPT_NAME install <POOL>' first."
+        exit 1
+    fi
+}
+
+# Backup file
+backup_file() {
+    local file="$1"
+    if [[ -f "$file" ]]; then
+        cp "$file" "$file.backup.$(date +%Y%m%d_%H%M%S)"
+        print_status "Backed up $file"
+    fi
+}
+
+# Install command
+cmd_install() {
+    local pool="$1"
+    local macos_opt="$2"
+
+    if [[ -z "$pool" ]]; then
+        print_error "Pool name is required"
+        show_usage
+        exit 1
+    fi
+
+    # Check if already initialized
+    local initialized
+    initialized=$(get_state_value "initialized" "false")
+    if [[ "$initialized" == "true" ]]; then
+        print_error "System already initialized. Use 'modify setup' to change configuration."
+        exit 1
+    fi
+
+    # Check if ZFS pool exists
+    if ! zpool status "$pool" &>/dev/null; then
+        print_error "ZFS pool '$pool' does not exist"
+        exit 1
+    fi
+
+    local server_name
+    server_name=$(hostname)
+    local workgroup="WORKGROUP"
+    local macos_optimized="false"
+
+    if [[ "$macos_opt" == "--macos" ]]; then
+        macos_optimized="true"
+    fi
+
+    print_header "INSTALL" "Setting up Samba with ZFS integration"
+    echo "Pool: $pool"
+    echo "Server: $server_name"
+    echo "Workgroup: $workgroup"
+    echo "macOS optimized: $macos_optimized"
+    echo ""
+
+    echo "Continue? (y/N):"
+    read -r confirm
+    if ! [[ "$confirm" =~ ^[Yy]$ ]]; then
+        echo "Installation cancelled."
+        exit 0
+    fi
+
+    # Update packages and install
+    print_status "Updating package list..."
+    apt update
+
+    print_status "Installing required packages..."
+    apt install -y samba samba-common-bin avahi-daemon jq
+
+    # Create ZFS datasets
+    print_status "Creating ZFS datasets..."
+    local homes_dataset="$pool/homes"
+    local shared_dataset="$pool/shared"
+
+    if ! zfs list "$homes_dataset" &>/dev/null; then
+        zfs create "$homes_dataset"
+        chmod 755 "/$pool/homes"
+    fi
+
+    if ! zfs list "$shared_dataset" &>/dev/null; then
+        zfs create "$shared_dataset"
+        chmod 775 "/$pool/shared"
+    fi
+
+    # Create smb_users group
+    if ! getent group smb_users &>/dev/null; then
+        groupadd smb_users
+        print_status "Created 'smb_users' group"
+    fi
+
+    chown root:smb_users "/$pool/shared"
+
+    # Configure Samba
+    print_status "Configuring Samba..."
+    backup_file "$SMB_CONF"
+
+    create_smb_conf "$pool" "$server_name" "$workgroup" "$macos_optimized"
+
+    # Configure Avahi
+    print_status "Configuring Avahi..."
+    backup_file "$AVAHI_SMB_SERVICE"
+
+    create_avahi_conf "$server_name"
+
+    # Test configuration
+    if ! testparm -s "$SMB_CONF" &>/dev/null; then
+        print_error "Samba configuration test failed"
+        exit 1
+    fi
+
+    # Start services
+    print_status "Starting services..."
+    systemctl enable smbd nmbd avahi-daemon
+    systemctl restart smbd nmbd avahi-daemon
+
+    # Update state
+    set_state_value "initialized" "true"
+    set_state_value "zfs_pool" "$pool"
+    set_state_value "server_name" "$server_name"
+    set_state_value "workgroup" "$workgroup"
+    set_state_value "macos_optimized" "$macos_optimized"
+
+    # Add built-in shares to state
+    local shared_config="{\"path\": \"/$pool/shared\", \"comment\": \"Shared Files\", \"browseable\": true, \"read_only\": false, \"valid_users\": \"@smb_users\"}"
+    add_to_state_object "shares" "shared" "$shared_config"
+
+    # Add smb_users group to state
+    local group_config="{\"description\": \"Samba Users Group\", \"members\": []}"
+    add_to_state_object "groups" "smb_users" "$group_config"
+
+    print_status "Installation completed successfully!"
+    echo ""
+    echo "Next steps:"
+    echo "  - Create users: $SCRIPT_NAME create user <username>"
+    echo "  - Create shares: $SCRIPT_NAME create share <sharename>"
+    echo "  - List created items: $SCRIPT_NAME list users|shares|groups"
+}
+
+# Create SMB configuration
+create_smb_conf() {
+    local pool="$1"
+    local server_name="$2"
+    local workgroup="$3"
+    local macos_optimized="$4"
+
+    cat > "$SMB_CONF" << EOF
+# Samba configuration file created by $SCRIPT_NAME
+# $(date)
+
+[global]
+    # Basic server settings
+    workgroup = $workgroup
+    server string = $server_name Samba Server
+    netbios name = $server_name
+
+    # Security settings
+    security = user
+    map to guest = never
+    passdb backend = tdbsam
+
+    # Network settings
+    dns proxy = no
+
+    # Logging
+    log file = /var/log/samba/log.%m
+    max log size = 1000
+    log level = 1
+
+    # Performance
+    socket options = TCP_NODELAY IPTOS_LOWDELAY SO_RCVBUF=524288 SO_SNDBUF=524288
+
+    # Avahi/Zeroconf support
+    multicast dns register = yes
+
+    # File creation settings
+    create mask = 0664
+    directory mask = 0775
+    force create mode = 0664
+    force directory mode = 0775
+EOF
+
+    if [[ "$macos_optimized" == "true" ]]; then
+        cat >> "$SMB_CONF" << EOF
+
+    # Mac compatibility with vfs_fruit
+    vfs objects = fruit streams_xattr
+    fruit:metadata = stream
+    fruit:model = MacSamba
+    fruit:posix_rename = yes
+    fruit:veto_appledouble = no
+    fruit:wipe_intentionally_left_blank_rfork = yes
+    fruit:delete_empty_adfiles = yes
+EOF
+    fi
+
+    cat >> "$SMB_CONF" << EOF
+
+# User home directories
+[homes]
+    comment = Home Directories
+    path = /$pool/homes/%S
+    browseable = no
+    read only = no
+    create mask = 0700
+    directory mask = 0700
+    valid users = %S
+    force user = %S
+
+# Shared directory
+[shared]
+    comment = Shared Files
+    path = /$pool/shared
+    browseable = yes
+    read only = no
+    create mask = 0664
+    directory mask = 0775
+    valid users = @smb_users
+EOF
+}
+
+# Create Avahi configuration
+create_avahi_conf() {
+    local server_name="$1"
+
+    cat > "$AVAHI_SMB_SERVICE" << EOF
+<?xml version="1.0" standalone='no'?>
+<!DOCTYPE service-group SYSTEM "avahi-service.dtd">
+<service-group>
+  <name replace-wildcards="yes">%h</name>
+  <service>
+    <type>_smb._tcp</type>
+    <port>445</port>
+  </service>
+  <service>
+    <type>_device-info._tcp</type>
+    <port>0</port>
+    <txt-record>model=RackMac</txt-record>
+  </service>
+</service-group>
+EOF
+}
+
+# Create user
+cmd_create_user() {
+    local username="$1"
+    local shell_opt="$2"
+
+    check_initialized
+
+    if [[ -z "$username" ]]; then
+        print_error "Username is required"
+        exit 1
+    fi
+
+    # Validate username
+    if ! [[ "$username" =~ ^[a-zA-Z0-9._-]+$ ]]; then
+        print_error "Username contains invalid characters"
+        exit 1
+    fi
+
+    # Check if user already exists
+    local state
+    state=$(read_state)
+    if echo "$state" | jq -e ".users[\"$username\"]" &>/dev/null; then
+        print_error "User '$username' already managed by this tool"
+        exit 1
+    fi
+
+    if id "$username" &>/dev/null; then
+        print_error "System user '$username' already exists"
+        exit 1
+    fi
+
+    local allow_shell="false"
+    if [[ "$shell_opt" == "--shell" ]]; then
+        allow_shell="true"
+    fi
+
+    local pool
+    pool=$(get_state_value "zfs_pool" "")
+
+    print_header "CREATE USER" "Creating user: $username"
+    echo "Shell access: $allow_shell"
+    echo "Home directory: /$pool/homes/$username"
+    echo ""
+
+    # Get password
+    echo "Enter password for user '$username':"
+    read -s password
+    echo ""
+    echo "Confirm password:"
+    read -s password_confirm
+    echo ""
+
+    if [[ "$password" != "$password_confirm" ]]; then
+        print_error "Passwords do not match"
+        exit 1
+    fi
+
+    if [[ ${#password} -lt 3 ]]; then
+        print_error "Password must be at least 3 characters long"
+        exit 1
+    fi
+
+    # Create system user
+    print_status "Creating system user..."
+    if [[ "$allow_shell" == "true" ]]; then
+        useradd -m -d "/$pool/homes/$username" -s /bin/bash "$username"
+    else
+        useradd -M -s /usr/sbin/nologin "$username"
+    fi
+
+    # Create ZFS dataset
+    print_status "Creating ZFS dataset..."
+    zfs create "$pool/homes/$username"
+    chown "$username:$username" "/$pool/homes/$username"
+    chmod 700 "/$pool/homes/$username"
+
+    # Set system password if shell access
+    if [[ "$allow_shell" == "true" ]]; then
+        echo "$username:$password" | chpasswd
+    fi
+
+    # Add to Samba
+    print_status "Adding to Samba..."
+    (echo "$password"; echo "$password") | smbpasswd -a -s "$username"
+    smbpasswd -e "$username"
+
+    # Add to smb_users group
+    usermod -a -G smb_users "$username"
+
+    # Prompt for additional groups
+    echo ""
+    echo "Available groups:"
+    get_state_object_keys "groups" | while read -r group; do
+        echo "  - $group"
+    done
+    echo ""
+    echo "Add user to additional groups? (comma-separated, or Enter to skip):"
+    read -r additional_groups
+
+    local groups_array="[]"
+    if [[ -n "$additional_groups" ]]; then
+        IFS=',' read -ra group_list <<< "$additional_groups"
+        for group in "${group_list[@]}"; do
+            group=$(echo "$group" | xargs) # trim whitespace
+            if getent group "$group" &>/dev/null; then
+                usermod -a -G "$group" "$username"
+                groups_array=$(echo "$groups_array" | jq ". + [\"$group\"]")
+            else
+                print_warning "Group '$group' does not exist, skipping"
+            fi
+        done
+    fi
+
+    # Add to state
+    local user_config="{\"shell_access\": $allow_shell, \"home_dataset\": \"$pool/homes/$username\", \"groups\": $groups_array, \"created\": \"$(date -Iseconds)\"}"
+    add_to_state_object "users" "$username" "$user_config"
+
+    print_status "User '$username' created successfully!"
+    echo "Access via: \\\\$(hostname)\\$username"
+}
+
+# Create share
+cmd_create_share() {
+    local sharename="$1"
+
+    check_initialized
+
+    if [[ -z "$sharename" ]]; then
+        print_error "Share name is required"
+        exit 1
+    fi
+
+    # Validate share name
+    if ! [[ "$sharename" =~ ^[a-zA-Z0-9._-]+$ ]]; then
+        print_error "Share name contains invalid characters"
+        exit 1
+    fi
+
+    # Check if share already exists
+    local state
+    state=$(read_state)
+    if echo "$state" | jq -e ".shares[\"$sharename\"]" &>/dev/null; then
+        print_error "Share '$sharename' already managed by this tool"
+        exit 1
+    fi
+
+    local pool
+    pool=$(get_state_value "zfs_pool" "")
+
+    print_header "CREATE SHARE" "Creating share: $sharename"
+
+    # Get share configuration
+    echo "Enter share comment [default: $sharename Share]:"
+    read -r comment
+    if [[ -z "$comment" ]]; then
+        comment="$sharename Share"
+    fi
+
+    echo "Enter dataset path [default: $sharename]:"
+    read -r dataset_path
+    if [[ -z "$dataset_path" ]]; then
+        dataset_path="$sharename"
+    fi
+
+    echo "Enter owner username [default: root]:"
+    read -r owner
+    if [[ -z "$owner" ]]; then
+        owner="root"
+    fi
+
+    echo "Enter group name [default: smb_users]:"
+    read -r group
+    if [[ -z "$group" ]]; then
+        group="smb_users"
+    fi
+
+    echo "Enter permissions [default: 775]:"
+    read -r perms
+    if [[ -z "$perms" ]]; then
+        perms="775"
+    fi
+
+    echo "Valid users (comma-separated, @ for groups, or * for all) [default: @smb_users]:"
+    read -r valid_users
+    if [[ -z "$valid_users" ]]; then
+        valid_users="@smb_users"
+    fi
+
+    echo "Read-only? (y/N):"
+    read -r readonly
+    if [[ "$readonly" =~ ^[Yy]$ ]]; then
+        readonly="yes"
+    else
+        readonly="no"
+    fi
+
+    echo "Browseable? (Y/n):"
+    read -r browseable
+    if [[ "$browseable" =~ ^[Nn]$ ]]; then
+        browseable="no"
+    else
+        browseable="yes"
+    fi
+
+    local dataset_full="$pool/$dataset_path"
+    local mount_point="/$pool/$dataset_path"
+
+    echo ""
+    echo "=== Summary ==="
+    echo "Share name: $sharename"
+    echo "Dataset: $dataset_full"
+    echo "Mount point: $mount_point"
+    echo "Owner: $owner:$group"
+    echo "Permissions: $perms"
+    echo "Valid users: $valid_users"
+    echo "Read-only: $readonly"
+    echo "Browseable: $browseable"
+    echo ""
+
+    echo "Create share? (y/N):"
+    read -r confirm
+    if ! [[ "$confirm" =~ ^[Yy]$ ]]; then
+        echo "Share creation cancelled."
+        exit 0
+    fi
+
+    # Create ZFS dataset
+    print_status "Creating ZFS dataset..."
+    if ! zfs list "$dataset_full" &>/dev/null; then
+        zfs create "$dataset_full"
+    fi
+
+    # Set permissions
+    chown "$owner:$group" "$mount_point"
+    chmod "$perms" "$mount_point"
+
+    # Add to Samba config
+    print_status "Adding to Samba configuration..."
+    cat >> "$SMB_CONF" << EOF
+
+[$sharename]
+    comment = $comment
+    path = $mount_point
+    browseable = $browseable
+    read only = $readonly
+    create mask = 0664
+    directory mask = 0775
+    valid users = $valid_users
+    force user = $owner
+    force group = $group
+EOF
+
+    # Test and reload
+    if ! testparm -s "$SMB_CONF" &>/dev/null; then
+        print_error "Samba configuration test failed"
+        exit 1
+    fi
+
+    systemctl reload smbd
+
+    # Add to state
+    local share_config="{\"dataset\": \"$dataset_full\", \"path\": \"$mount_point\", \"comment\": \"$comment\", \"owner\": \"$owner\", \"group\": \"$group\", \"permissions\": \"$perms\", \"valid_users\": \"$valid_users\", \"read_only\": \"$readonly\", \"browseable\": \"$browseable\", \"created\": \"$(date -Iseconds)\"}"
+    add_to_state_object "shares" "$sharename" "$share_config"
+
+    print_status "Share '$sharename' created successfully!"
+    echo "Access via: \\\\$(hostname)\\$sharename"
+}
+
+# Create group
+cmd_create_group() {
+    local groupname="$1"
+
+    check_initialized
+
+    if [[ -z "$groupname" ]]; then
+        print_error "Group name is required"
+        exit 1
+    fi
+
+    # Validate group name
+    if ! [[ "$groupname" =~ ^[a-zA-Z0-9._-]+$ ]]; then
+        print_error "Group name contains invalid characters"
+        exit 1
+    fi
+
+    # Check if group already exists
+    local state
+    state=$(read_state)
+    if echo "$state" | jq -e ".groups[\"$groupname\"]" &>/dev/null; then
+        print_error "Group '$groupname' already managed by this tool"
+        exit 1
+    fi
+
+    if getent group "$groupname" &>/dev/null; then
+        print_error "System group '$groupname' already exists"
+        exit 1
+    fi
+
+    print_header "CREATE GROUP" "Creating group: $groupname"
+
+    echo "Enter group description [default: $groupname Group]:"
+    read -r description
+    if [[ -z "$description" ]]; then
+        description="$groupname Group"
+    fi
+
+    # Create system group
+    print_status "Creating system group..."
+    groupadd "$groupname"
+
+    # Show available users
+    echo ""
+    echo "Available users:"
+    get_state_object_keys "users" | while read -r user; do
+        echo "  - $user"
+    done
+    echo ""
+    echo "Add users to group? (comma-separated, or Enter to skip):"
+    read -r users_to_add
+
+    local members_array="[]"
+    if [[ -n "$users_to_add" ]]; then
+        IFS=',' read -ra user_list <<< "$users_to_add"
+        for user in "${user_list[@]}"; do
+            user=$(echo "$user" | xargs) # trim whitespace
+            if id "$user" &>/dev/null; then
+                usermod -a -G "$groupname" "$user"
+                members_array=$(echo "$members_array" | jq ". + [\"$user\"]")
+                print_status "Added user '$user' to group '$groupname'"
+            else
+                print_warning "User '$user' does not exist, skipping"
+            fi
+        done
+    fi
+
+    # Add to state
+    local group_config="{\"description\": \"$description\", \"members\": $members_array, \"created\": \"$(date -Iseconds)\"}"
+    add_to_state_object "groups" "$groupname" "$group_config"
+
+    print_status "Group '$groupname' created successfully!"
+}
+
+# List users
+cmd_list_users() {
+    check_initialized
+
+    print_header "USERS" "Users managed by $SCRIPT_NAME"
+
+    local state
+    state=$(read_state)
+
+    if ! echo "$state" | jq -e '.users | keys | length > 0' &>/dev/null; then
+        echo "No users created yet."
+        return
+    fi
+
+    echo "$state" | jq -r '.users | to_entries[] | "\(.key):\n  Shell access: \(.value.shell_access)\n  Home dataset: \(.value.home_dataset)\n  Groups: \(.value.groups | join(", "))\n  Created: \(.value.created)\n"'
+}
+
+# List shares
+cmd_list_shares() {
+    check_initialized
+
+    print_header "SHARES" "Shares managed by $SCRIPT_NAME"
+
+    local state
+    state=$(read_state)
+
+    if ! echo "$state" | jq -e '.shares | keys | length > 0' &>/dev/null; then
+        echo "No shares created yet."
+        return
+    fi
+
+    echo "$state" | jq -r '.shares | to_entries[] | "\(.key):\n  Path: \(.value.path)\n  Comment: \(.value.comment)\n  Owner: \(.value.owner):\(.value.group)\n  Permissions: \(.value.permissions)\n  Valid users: \(.value.valid_users)\n  Read-only: \(.value.read_only)\n  Browseable: \(.value.browseable)\n  Created: \(.value.created)\n"'
+}
+
+# List groups
+cmd_list_groups() {
+    check_initialized
+
+    print_header "GROUPS" "Groups managed by $SCRIPT_NAME"
+
+    local state
+    state=$(read_state)
+
+    if ! echo "$state" | jq -e '.groups | keys | length > 0' &>/dev/null; then
+        echo "No groups created yet."
+        return
+    fi
+
+    echo "$state" | jq -r '.groups | to_entries[] | "\(.key):\n  Description: \(.value.description)\n  Members: \(.value.members | join(", "))\n  Created: \(.value.created)\n"'
+}
+
+# Delete user
+cmd_delete_user() {
+    local username="$1"
+
+    check_initialized
+
+    if [[ -z "$username" ]]; then
+        print_error "Username is required"
+        exit 1
+    fi
+
+    # Check if user exists in state
+    local state
+    state=$(read_state)
+    if ! echo "$state" | jq -e ".users[\"$username\"]" &>/dev/null; then
+        print_error "User '$username' is not managed by this tool"
+        exit 1
+    fi
+
+    local pool
+    pool=$(get_state_value "zfs_pool" "")
+
+    print_header "DELETE USER" "Removing user: $username"
+    print_warning "This will remove:"
+    echo "  - System user account"
+    echo "  - Samba user account"
+    echo "  - ZFS dataset: $pool/homes/$username"
+    echo "  - All data in home directory"
+    echo ""
+
+    echo "Are you sure? Type 'DELETE' to confirm:"
+    read -r confirm
+    if [[ "$confirm" != "DELETE" ]]; then
+        echo "User deletion cancelled."
+        exit 0
+    fi
+
+    # Remove from Samba
+    print_status "Removing from Samba..."
+    if pdbedit -L | grep -q "^$username:"; then
+        smbpasswd -x "$username"
+    fi
+
+    # Remove system user
+    print_status "Removing system user..."
+    if id "$username" &>/dev/null; then
+        userdel "$username"
+    fi
+
+    # Remove ZFS dataset
+    print_status "Removing ZFS dataset..."
+    if zfs list "$pool/homes/$username" &>/dev/null; then
+        zfs destroy "$pool/homes/$username"
+    fi
+
+    # Remove from state
+    remove_from_state_object "users" "$username"
+
+    print_status "User '$username' deleted successfully!"
+}
+
+# Delete share
+cmd_delete_share() {
+    local sharename="$1"
+
+    check_initialized
+
+    if [[ -z "$sharename" ]]; then
+        print_error "Share name is required"
+        exit 1
+    fi
+
+    # Check if share exists in state
+    local state
+    state=$(read_state)
+    if ! echo "$state" | jq -e ".shares[\"$sharename\"]" &>/dev/null; then
+        print_error "Share '$sharename' is not managed by this tool"
+        exit 1
+    fi
+
+    local dataset
+    dataset=$(echo "$state" | jq -r ".shares[\"$sharename\"].dataset")
+
+    print_header "DELETE SHARE" "Removing share: $sharename"
+    print_warning "This will remove:"
+    echo "  - Samba share configuration"
+    echo "  - ZFS dataset: $dataset"
+    echo "  - All data in the share"
+    echo ""
+
+    echo "Are you sure? Type 'DELETE' to confirm:"
+    read -r confirm
+    if [[ "$confirm" != "DELETE" ]]; then
+        echo "Share deletion cancelled."
+        exit 0
+    fi
+
+    # Remove from Samba config
+    print_status "Removing from Samba configuration..."
+    backup_file "$SMB_CONF"
+
+    # Remove share section from config (simple approach)
+    sed -i "/^\[$sharename\]/,/^$/d" "$SMB_CONF"
+
+    # Test configuration
+    if ! testparm -s "$SMB_CONF" &>/dev/null; then
+        print_error "Samba configuration test failed"
+        exit 1
+    fi
+
+    systemctl reload smbd
+
+    # Remove ZFS dataset
+    print_status "Removing ZFS dataset..."
+    if zfs list "$dataset" &>/dev/null; then
+        zfs destroy "$dataset"
+    fi
+
+    # Remove from state
+    remove_from_state_object "shares" "$sharename"
+
+    print_status "Share '$sharename' deleted successfully!"
+}
+
+# Delete group
+cmd_delete_group() {
+    local groupname="$1"
+
+    check_initialized
+
+    if [[ -z "$groupname" ]]; then
+        print_error "Group name is required"
+        exit 1
+    fi
+
+    # Check if group exists in state
+    local state
+    state=$(read_state)
+    if ! echo "$state" | jq -e ".groups[\"$groupname\"]" &>/dev/null; then
+        print_error "Group '$groupname' is not managed by this tool"
+        exit 1
+    fi
+
+    # Don't allow deletion of smb_users group
+    if [[ "$groupname" == "smb_users" ]]; then
+        print_error "Cannot delete the 'smb_users' group"
+        exit 1
+    fi
+
+    print_header "DELETE GROUP" "Removing group: $groupname"
+    print_warning "This will remove the system group and all its memberships"
+    echo ""
+
+    echo "Are you sure? Type 'DELETE' to confirm:"
+    read -r confirm
+    if [[ "$confirm" != "DELETE" ]]; then
+        echo "Group deletion cancelled."
+        exit 0
+    fi
+
+    # Remove system group
+    print_status "Removing system group..."
+    if getent group "$groupname" &>/dev/null; then
+        groupdel "$groupname"
+    fi
+
+    # Remove from state
+    remove_from_state_object "groups" "$groupname"
+
+    print_status "Group '$groupname' deleted successfully!"
+}
+
+# Modify share
+cmd_modify_share() {
+    local sharename="$1"
+
+    check_initialized
+
+    if [[ -z "$sharename" ]]; then
+        print_error "Share name is required"
+        exit 1
+    fi
+
+    # Check if share exists in state
+    local state
+    state=$(read_state)
+    if ! echo "$state" | jq -e ".shares[\"$sharename\"]" &>/dev/null; then
+        print_error "Share '$sharename' is not managed by this tool"
+        exit 1
+    fi
+
+    print_header "MODIFY SHARE" "Modifying share: $sharename"
+
+    # Get current configuration
+    local current_config
+    current_config=$(echo "$state" | jq -r ".shares[\"$sharename\"]")
+    local current_comment
+    current_comment=$(echo "$current_config" | jq -r '.comment')
+    local current_valid_users
+    current_valid_users=$(echo "$current_config" | jq -r '.valid_users')
+    local current_readonly
+    current_readonly=$(echo "$current_config" | jq -r '.read_only')
+    local current_browseable
+    current_browseable=$(echo "$current_config" | jq -r '.browseable')
+    local current_perms
+    current_perms=$(echo "$current_config" | jq -r '.permissions')
+    local current_owner
+    current_owner=$(echo "$current_config" | jq -r '.owner')
+    local current_group
+    current_group=$(echo "$current_config" | jq -r '.group')
+    local share_path
+    share_path=$(echo "$current_config" | jq -r '.path')
+
+    echo "Current configuration:"
+    echo "  Comment: $current_comment"
+    echo "  Valid users: $current_valid_users"
+    echo "  Read-only: $current_readonly"
+    echo "  Browseable: $current_browseable"
+    echo "  Permissions: $current_perms"
+    echo "  Owner: $current_owner:$current_group"
+    echo ""
+
+    # Get new configuration
+    echo "Enter new comment [current: $current_comment]:"
+    read -r new_comment
+    if [[ -z "$new_comment" ]]; then
+        new_comment="$current_comment"
+    fi
+
+    echo "Available users and groups:"
+    echo "Users:"
+    get_state_object_keys "users" | while read -r user; do
+        echo "  - $user"
+    done
+    echo "Groups:"
+    get_state_object_keys "groups" | while read -r group; do
+        echo "  - @$group"
+    done
+    echo ""
+    echo "Enter valid users [current: $current_valid_users]:"
+    read -r new_valid_users
+    if [[ -z "$new_valid_users" ]]; then
+        new_valid_users="$current_valid_users"
+    fi
+
+    echo "Read-only? (y/n) [current: $current_readonly]:"
+    read -r readonly_input
+    if [[ -z "$readonly_input" ]]; then
+        new_readonly="$current_readonly"
+    elif [[ "$readonly_input" =~ ^[Yy]$ ]]; then
+        new_readonly="yes"
+    else
+        new_readonly="no"
+    fi
+
+    echo "Browseable? (y/n) [current: $current_browseable]:"
+    read -r browseable_input
+    if [[ -z "$browseable_input" ]]; then
+        new_browseable="$current_browseable"
+    elif [[ "$browseable_input" =~ ^[Yy]$ ]]; then
+        new_browseable="yes"
+    else
+        new_browseable="no"
+    fi
+
+    echo "Enter permissions [current: $current_perms]:"
+    read -r new_perms
+    if [[ -z "$new_perms" ]]; then
+        new_perms="$current_perms"
+    fi
+
+    echo "Enter owner [current: $current_owner]:"
+    read -r new_owner
+    if [[ -z "$new_owner" ]]; then
+        new_owner="$current_owner"
+    fi
+
+    echo "Enter group [current: $current_group]:"
+    read -r new_group
+    if [[ -z "$new_group" ]]; then
+        new_group="$current_group"
+    fi
+
+    echo ""
+    echo "=== Summary of Changes ==="
+    echo "Share: $sharename"
+    echo "Comment: $current_comment -> $new_comment"
+    echo "Valid users: $current_valid_users -> $new_valid_users"
+    echo "Read-only: $current_readonly -> $new_readonly"
+    echo "Browseable: $current_browseable -> $new_browseable"
+    echo "Permissions: $current_perms -> $new_perms"
+    echo "Owner: $current_owner:$current_group -> $new_owner:$new_group"
+    echo ""
+
+    echo "Apply changes? (y/N):"
+    read -r confirm
+    if ! [[ "$confirm" =~ ^[Yy]$ ]]; then
+        echo "Modification cancelled."
+        exit 0
+    fi
+
+    # Update file system permissions
+    print_status "Updating file system permissions..."
+    chown "$new_owner:$new_group" "$share_path"
+    chmod "$new_perms" "$share_path"
+
+    # Update Samba configuration
+    print_status "Updating Samba configuration..."
+    backup_file "$SMB_CONF"
+
+    # Remove old share section and add new one
+    sed -i "/^\[$sharename\]/,/^$/d" "$SMB_CONF"
+    cat >> "$SMB_CONF" << EOF
+
+[$sharename]
+    comment = $new_comment
+    path = $share_path
+    browseable = $new_browseable
+    read only = $new_readonly
+    create mask = 0664
+    directory mask = 0775
+    valid users = $new_valid_users
+    force user = $new_owner
+    force group = $new_group
+EOF
+
+    # Test and reload
+    if ! testparm -s "$SMB_CONF" &>/dev/null; then
+        print_error "Samba configuration test failed"
+        exit 1
+    fi
+
+    systemctl reload smbd
+
+    # Update state
+    local updated_config
+    updated_config=$(echo "$current_config" | jq \
+        --arg comment "$new_comment" \
+        --arg valid_users "$new_valid_users" \
+        --arg read_only "$new_readonly" \
+        --arg browseable "$new_browseable" \
+        --arg permissions "$new_perms" \
+        --arg owner "$new_owner" \
+        --arg group "$new_group" \
+        '.comment = $comment | .valid_users = $valid_users | .read_only = $read_only | .browseable = $browseable | .permissions = $permissions | .owner = $owner | .group = $group')
+
+    add_to_state_object "shares" "$sharename" "$updated_config"
+
+    print_status "Share '$sharename' modified successfully!"
+}
+
+# Modify group
+cmd_modify_group() {
+    local groupname="$1"
+
+    check_initialized
+
+    if [[ -z "$groupname" ]]; then
+        print_error "Group name is required"
+        exit 1
+    fi
+
+    # Check if group exists in state
+    local state
+    state=$(read_state)
+    if ! echo "$state" | jq -e ".groups[\"$groupname\"]" &>/dev/null; then
+        print_error "Group '$groupname' is not managed by this tool"
+        exit 1
+    fi
+
+    print_header "MODIFY GROUP" "Modifying group: $groupname"
+
+    # Get current members
+    local current_members
+    current_members=$(echo "$state" | jq -r ".groups[\"$groupname\"].members | join(\", \")")
+
+    echo "Current members: $current_members"
+    echo ""
+    echo "Available users:"
+    get_state_object_keys "users" | while read -r user; do
+        echo "  - $user"
+    done
+    echo ""
+
+    echo "Add users to group (comma-separated):"
+    read -r users_to_add
+
+    echo "Remove users from group (comma-separated):"
+    read -r users_to_remove
+
+    local members_array
+    members_array=$(echo "$state" | jq -r ".groups[\"$groupname\"].members")
+
+    # Add users
+    if [[ -n "$users_to_add" ]]; then
+        IFS=',' read -ra user_list <<< "$users_to_add"
+        for user in "${user_list[@]}"; do
+            user=$(echo "$user" | xargs) # trim whitespace
+            if id "$user" &>/dev/null; then
+                usermod -a -G "$groupname" "$user"
+                if ! echo "$members_array" | jq -e ". | index(\"$user\")" &>/dev/null; then
+                    members_array=$(echo "$members_array" | jq ". + [\"$user\"]")
+                fi
+                print_status "Added user '$user' to group '$groupname'"
+            else
+                print_warning "User '$user' does not exist, skipping"
+            fi
+        done
+    fi
+
+    # Remove users
+    if [[ -n "$users_to_remove" ]]; then
+        IFS=',' read -ra user_list <<< "$users_to_remove"
+        for user in "${user_list[@]}"; do
+            user=$(echo "$user" | xargs) # trim whitespace
+            if id "$user" &>/dev/null; then
+                gpasswd -d "$user" "$groupname" 2>/dev/null || true
+                members_array=$(echo "$members_array" | jq "map(select(. != \"$user\"))")
+                print_status "Removed user '$user' from group '$groupname'"
+            else
+                print_warning "User '$user' does not exist, skipping"
+            fi
+        done
+    fi
+
+    # Update state
+    local updated_config
+    updated_config=$(echo "$state" | jq --argjson members "$members_array" ".groups[\"$groupname\"].members = \$members")
+    write_state "$updated_config"
+
+    print_status "Group '$groupname' modified successfully!"
+}
+
+# Modify setup
+cmd_modify_setup() {
+    check_initialized
+
+    print_header "MODIFY SETUP" "Modifying server configuration"
+
+    local current_server_name
+    current_server_name=$(get_state_value "server_name" "")
+    local current_workgroup
+    current_workgroup=$(get_state_value "workgroup" "")
+    local current_macos
+    current_macos=$(get_state_value "macos_optimized" "false")
+    local pool
+    pool=$(get_state_value "zfs_pool" "")
+
+    echo "Current configuration:"
+    echo "  Server name: $current_server_name"
+    echo "  Workgroup: $current_workgroup"
+    echo "  macOS optimized: $current_macos"
+    echo "  ZFS pool: $pool (cannot be changed)"
+    echo ""
+
+    echo "Enter new server name [current: $current_server_name]:"
+    read -r new_server_name
+    if [[ -z "$new_server_name" ]]; then
+        new_server_name="$current_server_name"
+    fi
+
+    echo "Enter new workgroup [current: $current_workgroup]:"
+    read -r new_workgroup
+    if [[ -z "$new_workgroup" ]]; then
+        new_workgroup="$current_workgroup"
+    fi
+
+    echo "Enable macOS optimization? (y/n) [current: $current_macos]:"
+    read -r macos_input
+    if [[ -z "$macos_input" ]]; then
+        new_macos="$current_macos"
+    elif [[ "$macos_input" =~ ^[Yy]$ ]]; then
+        new_macos="true"
+    else
+        new_macos="false"
+    fi
+
+    echo ""
+    echo "=== Summary of Changes ==="
+    echo "Server name: $current_server_name -> $new_server_name"
+    echo "Workgroup: $current_workgroup -> $new_workgroup"
+    echo "macOS optimized: $current_macos -> $new_macos"
+    echo ""
+
+    echo "Apply changes? (y/N):"
+    read -r confirm
+    if ! [[ "$confirm" =~ ^[Yy]$ ]]; then
+        echo "Modification cancelled."
+        exit 0
+    fi
+
+    # Update Samba configuration
+    print_status "Updating Samba configuration..."
+    backup_file "$SMB_CONF"
+
+    create_smb_conf "$pool" "$new_server_name" "$new_workgroup" "$new_macos"
+
+    # Re-add all shares from state
+    local state
+    state=$(read_state)
+    echo "$state" | jq -r '.shares | to_entries[]' | while IFS= read -r share_entry; do
+        local share_name
+        share_name=$(echo "$share_entry" | jq -r '.key')
+        local share_config
+        share_config=$(echo "$share_entry" | jq -r '.value')
+
+        # Skip built-in shares as they're already in the base config
+        if [[ "$share_name" == "shared" ]]; then
+            continue
+        fi
+
+        local comment
+        comment=$(echo "$share_config" | jq -r '.comment')
+        local path
+        path=$(echo "$share_config" | jq -r '.path')
+        local browseable
+        browseable=$(echo "$share_config" | jq -r '.browseable')
+        local read_only
+        read_only=$(echo "$share_config" | jq -r '.read_only')
+        local valid_users
+        valid_users=$(echo "$share_config" | jq -r '.valid_users')
+        local owner
+        owner=$(echo "$share_config" | jq -r '.owner')
+        local group
+        group=$(echo "$share_config" | jq -r '.group')
+
+        cat >> "$SMB_CONF" << EOF
+
+[$share_name]
+    comment = $comment
+    path = $path
+    browseable = $browseable
+    read only = $read_only
+    create mask = 0664
+    directory mask = 0775
+    valid users = $valid_users
+    force user = $owner
+    force group = $group
+EOF
+    done
+
+    # Update Avahi configuration
+    print_status "Updating Avahi configuration..."
+    backup_file "$AVAHI_SMB_SERVICE"
+    create_avahi_conf "$new_server_name"
+
+    # Test and reload
+    if ! testparm -s "$SMB_CONF" &>/dev/null; then
+        print_error "Samba configuration test failed"
+        exit 1
+    fi
+
+    systemctl reload smbd nmbd avahi-daemon
+
+    # Update state
+    set_state_value "server_name" "$new_server_name"
+    set_state_value "workgroup" "$new_workgroup"
+    set_state_value "macos_optimized" "$new_macos"
+
+    print_status "Server configuration updated successfully!"
+}
+
+# Change password
+cmd_passwd() {
+    local username="$1"
+    local current_user
+    current_user=$(whoami)
+
+    # If no username provided, use current user
+    if [[ -z "$username" ]]; then
+        username="$current_user"
+
+        # Check if current user is managed by this tool
+        if [[ -f "$STATE_FILE" ]]; then
+            local state
+            state=$(read_state)
+            if ! echo "$state" | jq -e ".users[\"$username\"]" &>/dev/null; then
+                print_error "Current user '$username' is not managed by this tool"
+                exit 1
+            fi
+        else
+            print_error "System not initialized"
+            exit 1
+        fi
+    else
+        # If username provided, must be root
+        if [[ $EUID -ne 0 ]]; then
+            print_error "Root privileges required to change another user's password"
+            exit 1
+        fi
+
+        check_initialized
+
+        # Check if user exists in state
+        local state
+        state=$(read_state)
+        if ! echo "$state" | jq -e ".users[\"$username\"]" &>/dev/null; then
+            print_error "User '$username' is not managed by this tool"
+            exit 1
+        fi
+    fi
+
+    print_header "CHANGE PASSWORD" "Changing password for user: $username"
+
+    # Get new password
+    echo "Enter new password for '$username':"
+    read -s new_password
+    echo ""
+    echo "Confirm new password:"
+    read -s confirm_password
+    echo ""
+
+    if [[ "$new_password" != "$confirm_password" ]]; then
+        print_error "Passwords do not match"
+        exit 1
+    fi
+
+    if [[ ${#new_password} -lt 3 ]]; then
+        print_error "Password must be at least 3 characters long"
+        exit 1
+    fi
+
+    # Check if user has shell access
+    local state
+    state=$(read_state)
+    local shell_access
+    shell_access=$(echo "$state" | jq -r ".users[\"$username\"].shell_access")
+
+    # Update system password if shell access enabled
+    if [[ "$shell_access" == "true" ]]; then
+        print_status "Updating system password..."
+        echo "$username:$new_password" | chpasswd
+    fi
+
+    # Update Samba password
+    print_status "Updating Samba password..."
+    (echo "$new_password"; echo "$new_password") | smbpasswd -a -s "$username"
+
+    print_status "Password changed successfully for user '$username'!"
+}
+
+# Uninstall
+cmd_uninstall() {
+    check_initialized
+
+    print_header "UNINSTALL" "Removing all configuration"
+    print_warning "This will remove:"
+    echo "  - All Samba configuration"
+    echo "  - All Avahi configuration"
+    echo "  - All users created by this tool"
+    echo "  - All groups created by this tool"
+    echo "  - All ZFS datasets (HOME DIRECTORIES AND SHARES)"
+    echo "  - State file"
+    echo ""
+    print_error "THIS WILL DELETE ALL USER DATA!"
+    echo ""
+
+    echo "Are you absolutely sure? Type 'UNINSTALL' to confirm:"
+    read -r confirm
+    if [[ "$confirm" != "UNINSTALL" ]]; then
+        echo "Uninstallation cancelled."
+        exit 0
+    fi
+
+    local pool
+    pool=$(get_state_value "zfs_pool" "")
+    local state
+    state=$(read_state)
+
+    # Remove all users
+    print_status "Removing users..."
+    echo "$state" | jq -r '.users | keys[]' | while read -r username; do
+        print_status "Removing user: $username"
+
+        # Remove from Samba
+        if pdbedit -L | grep -q "^$username:"; then
+            smbpasswd -x "$username" 2>/dev/null || true
+        fi
+
+        # Remove system user
+        if id "$username" &>/dev/null; then
+            userdel "$username" 2>/dev/null || true
+        fi
+
+        # Remove ZFS dataset
+        if zfs list "$pool/homes/$username" &>/dev/null; then
+            zfs destroy "$pool/homes/$username" 2>/dev/null || true
+        fi
+    done
+
+    # Remove all custom groups (keep smb_users for last)
+    print_status "Removing groups..."
+    echo "$state" | jq -r '.groups | keys[]' | while read -r groupname; do
+        if [[ "$groupname" != "smb_users" ]]; then
+            print_status "Removing group: $groupname"
+            if getent group "$groupname" &>/dev/null; then
+                groupdel "$groupname" 2>/dev/null || true
+            fi
+        fi
+    done
+
+    # Remove all shares
+    print_status "Removing shares..."
+    echo "$state" | jq -r '.shares | keys[]' | while read -r sharename; do
+        if [[ "$sharename" != "shared" ]]; then
+            print_status "Removing share: $sharename"
+            local dataset
+            dataset=$(echo "$state" | jq -r ".shares[\"$sharename\"].dataset")
+            if zfs list "$dataset" &>/dev/null; then
+                zfs destroy "$dataset" 2>/dev/null || true
+            fi
+        fi
+    done
+
+    # Remove base ZFS datasets
+    print_status "Removing base ZFS datasets..."
+    if zfs list "$pool/shared" &>/dev/null; then
+        zfs destroy "$pool/shared" 2>/dev/null || true
+    fi
+    if zfs list "$pool/homes" &>/dev/null; then
+        zfs destroy "$pool/homes" 2>/dev/null || true
+    fi
+
+    # Remove smb_users group
+    if getent group smb_users &>/dev/null; then
+        groupdel smb_users 2>/dev/null || true
+    fi
+
+    # Remove configuration files
+    print_status "Removing configuration files..."
+    if [[ -f "$SMB_CONF" ]]; then
+        rm -f "$SMB_CONF"
+    fi
+    if [[ -f "$AVAHI_SMB_SERVICE" ]]; then
+        rm -f "$AVAHI_SMB_SERVICE"
+    fi
+
+    # Stop services
+    print_status "Stopping services..."
+    systemctl stop smbd nmbd 2>/dev/null || true
+    systemctl disable smbd nmbd 2>/dev/null || true
+
+    # Remove state file
+    if [[ -f "$STATE_FILE" ]]; then
+        rm -f "$STATE_FILE"
+    fi
+
+    print_status "Uninstallation completed successfully!"
+    echo "You may want to remove the samba packages manually if no longer needed:"
+    echo "  apt remove samba samba-common-bin avahi-daemon"
+}
+
+# Main command dispatcher
+main() {
+    # Initialize state file
+    init_state
+
+    # Parse command line arguments
+    if [[ $# -eq 0 ]]; then
+        show_usage
+        exit 0
+    fi
+
+    local command="$1"
+    shift
+
+    case "$command" in
+        "install")
+            check_root
+            cmd_install "$@"
+            ;;
+        "create")
+            check_root
+            local subcommand="$1"
+            shift
+            case "$subcommand" in
+                "user")
+                    cmd_create_user "$@"
+                    ;;
+                "share")
+                    cmd_create_share "$@"
+                    ;;
+                "group")
+                    cmd_create_group "$@"
+                    ;;
+                *)
+                    print_error "Unknown create subcommand: $subcommand"
+                    show_usage
+                    exit 1
+                    ;;
+            esac
+            ;;
+        "modify")
+            check_root
+            local subcommand="$1"
+            shift
+            case "$subcommand" in
+                "share")
+                    cmd_modify_share "$@"
+                    ;;
+                "group")
+                    cmd_modify_group "$@"
+                    ;;
+                "setup")
+                    cmd_modify_setup "$@"
+                    ;;
+                *)
+                    print_error "Unknown modify subcommand: $subcommand"
+                    show_usage
+                    exit 1
+                    ;;
+            esac
+            ;;
+        "list")
+            local subcommand="$1"
+            shift
+            case "$subcommand" in
+                "users")
+                    cmd_list_users "$@"
+                    ;;
+                "shares")
+                    cmd_list_shares "$@"
+                    ;;
+                "groups")
+                    cmd_list_groups "$@"
+                    ;;
+                *)
+                    print_error "Unknown list subcommand: $subcommand"
+                    show_usage
+                    exit 1
+                    ;;
+            esac
+            ;;
+        "delete")
+            check_root
+            local subcommand="$1"
+            shift
+            case "$subcommand" in
+                "user")
+                    cmd_delete_user "$@"
+                    ;;
+                "share")
+                    cmd_delete_share "$@"
+                    ;;
+                "group")
+                    cmd_delete_group "$@"
+                    ;;
+                *)
+                    print_error "Unknown delete subcommand: $subcommand"
+                    show_usage
+                    exit 1
+                    ;;
+            esac
+            ;;
+        "passwd")
+            cmd_passwd "$@"
+            ;;
+        "uninstall")
+            check_root
+            cmd_uninstall "$@"
+            ;;
+        "-h"|"--help")
+            show_usage
+            exit 0
+            ;;
+        *)
+            print_error "Unknown command: $command"
+            show_usage
+            exit 1
+            ;;
+    esac
+}
+
+# Run main function with all arguments
+main "$@"
