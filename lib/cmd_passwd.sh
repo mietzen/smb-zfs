@@ -40,23 +40,7 @@ cmd_passwd() {
 
     print_header "CHANGE PASSWORD" "Changing password for user: $username"
 
-    # Get new password
-    echo "Enter new password for '$username':"
-    read -s new_password
-    echo ""
-    echo "Confirm new password:"
-    read -s confirm_password
-    echo ""
-
-    if [[ "$new_password" != "$confirm_password" ]]; then
-        print_error "Passwords do not match"
-        exit 1
-    fi
-
-    if [[ ${#new_password} -lt 3 ]]; then
-        print_error "Password must be at least 3 characters long"
-        exit 1
-    fi
+    password=$(get_passwd)
 
     # Check if user has shell access
     local state
