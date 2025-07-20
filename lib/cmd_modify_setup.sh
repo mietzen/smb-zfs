@@ -2,7 +2,7 @@
 cmd_modify_setup() {
     check_initialized
 
-    print_header "MODIFY SETUP" "Modifying server configuration"
+    print_info "Modifying server configuration"
 
     local current_server_name
     current_server_name=$(get_state_value "server_name" "")
@@ -57,7 +57,7 @@ cmd_modify_setup() {
     fi
 
     # Update Samba configuration
-    print_status "Updating Samba configuration..."
+    print_info "Updating Samba configuration..."
     backup_file "$SMB_CONF"
 
     create_smb_conf "$pool" "$new_server_name" "$new_workgroup" "$new_macos"
@@ -107,7 +107,7 @@ EOF
     done
 
     # Update Avahi configuration
-    print_status "Updating Avahi configuration..."
+    print_info "Updating Avahi configuration..."
     backup_file "$AVAHI_SMB_SERVICE"
     create_avahi_conf "$new_server_name"
 
@@ -124,5 +124,5 @@ EOF
     set_state_value "workgroup" "$new_workgroup"
     set_state_value "macos_optimized" "$new_macos"
 
-    print_status "Server configuration updated successfully!"
+    print_info "Server configuration updated successfully!"
 }

@@ -2,7 +2,7 @@
 cmd_list_users() {
     check_initialized
 
-    print_header "USERS" "Users managed by $SCRIPT_NAME"
+    print_info "Users managed by $SCRIPT_NAME"
 
     local state
     state=$(read_state)

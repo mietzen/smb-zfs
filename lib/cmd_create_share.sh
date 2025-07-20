@@ -27,7 +27,7 @@ cmd_create_share() {
     local pool
     pool=$(get_state_value "zfs_pool" "")
 
-    print_header "CREATE SHARE" "Creating share: $sharename"
+    print_info "Creating share: $sharename"
 
     # Get share configuration
     echo "Enter share comment [default: $sharename Share]:"
@@ -105,7 +105,7 @@ cmd_create_share() {
     fi
 
     # Create ZFS dataset
-    print_status "Creating ZFS dataset..."
+    print_info "Creating ZFS dataset..."
     if ! zfs list "$dataset_full" &>/dev/null; then
         zfs create "$dataset_full"
     fi
@@ -115,7 +115,7 @@ cmd_create_share() {
     chmod "$perms" "$mount_point"
 
     # Add to Samba config
-    print_status "Adding to Samba configuration..."
+    print_info "Adding to Samba configuration..."
     cat >> "$SMB_CONF" << EOF
 
 [$sharename]
@@ -142,6 +142,6 @@ EOF
     local share_config="{\"dataset\": \"$dataset_full\", \"path\": \"$mount_point\", \"comment\": \"$comment\", \"owner\": \"$owner\", \"group\": \"$group\", \"permissions\": \"$perms\", \"valid_users\": \"$valid_users\", \"read_only\": \"$readonly\", \"browseable\": \"$browseable\", \"created\": \"$(date -Iseconds)\"}"
     add_to_state_object "shares" "$sharename" "$share_config"
 
-    print_status "Share '$sharename' created successfully!"
+    print_info "Share '$sharename' created successfully!"
     echo "Access via: \\\\$(hostname)\\$sharename"
 }

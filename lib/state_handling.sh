@@ -15,7 +15,7 @@ init_state() {
   "groups": {}
 }
 EOF
-        print_status "Initialized state file: $STATE_FILE"
+        print_info "Initialized state file: $STATE_FILE"
     fi
 }
 

@@ -2,7 +2,7 @@
 cmd_uninstall() {
     check_initialized
 
-    print_header "UNINSTALL" "Removing all configuration"
+    print_info "Removing all configuration"
     print_warning "This will remove:"
     echo "  - All Samba configuration"
     echo "  - All Avahi configuration"
@@ -27,9 +27,9 @@ cmd_uninstall() {
     state=$(read_state)
 
     # Remove all users
-    print_status "Removing users..."
+    print_info "Removing users..."
     echo "$state" | jq -r '.users | keys[]' | while read -r username; do
-        print_status "Removing user: $username"
+        print_info "Removing user: $username"
 
         # Remove from Samba
         if pdbedit -L | grep -q "^$username:"; then
@@ -48,10 +48,10 @@ cmd_uninstall() {
     done
 
     # Remove all custom groups (keep smb_users for last)
-    print_status "Removing groups..."
+    print_info "Removing groups..."
     echo "$state" | jq -r '.groups | keys[]' | while read -r groupname; do
         if [[ "$groupname" != "smb_users" ]]; then
-            print_status "Removing group: $groupname"
+            print_info "Removing group: $groupname"
             if getent group "$groupname" &>/dev/null; then
                 groupdel "$groupname" 2>/dev/null || true
             fi
@@ -59,10 +59,10 @@ cmd_uninstall() {
     done
 
     # Remove all shares
-    print_status "Removing shares..."
+    print_info "Removing shares..."
     echo "$state" | jq -r '.shares | keys[]' | while read -r sharename; do
         if [[ "$sharename" != "shared" ]]; then
-            print_status "Removing share: $sharename"
+            print_info "Removing share: $sharename"
             local dataset
             dataset=$(echo "$state" | jq -r ".shares[\"$sharename\"].dataset")
             if zfs list "$dataset" &>/dev/null; then
@@ -72,7 +72,7 @@ cmd_uninstall() {
     done
 
     # Remove base ZFS datasets
-    print_status "Removing base ZFS datasets..."
+    print_info "Removing base ZFS datasets..."
     if zfs list "$pool/shared" &>/dev/null; then
         zfs destroy "$pool/shared" 2>/dev/null || true
     fi
@@ -86,7 +86,7 @@ cmd_uninstall() {
     fi
 
     # Remove configuration files
-    print_status "Removing configuration files..."
+    print_info "Removing configuration files..."
     if [[ -f "$SMB_CONF" ]]; then
         rm -f "$SMB_CONF"
     fi
@@ -95,7 +95,7 @@ cmd_uninstall() {
     fi
 
     # Stop services
-    print_status "Stopping services..."
+    print_info "Stopping services..."
     systemctl stop smbd nmbd 2>/dev/null || true
     systemctl disable smbd nmbd 2>/dev/null || true
 
@@ -104,7 +104,7 @@ cmd_uninstall() {
         rm -f "$STATE_FILE"
     fi
 
-    print_status "Uninstallation completed successfully!"
+    print_info "Uninstallation completed successfully!"
     echo "You may want to remove the samba packages manually if no longer needed:"
     echo "  apt remove samba samba-common-bin avahi-daemon"
 }

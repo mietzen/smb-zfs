@@ -23,7 +23,7 @@ cmd_delete_group() {
         exit 1
     fi
 
-    print_header "DELETE GROUP" "Removing group: $groupname"
+    print_info "Removing group: $groupname"
     print_warning "This will remove the system group and all its memberships"
     echo ""
 
@@ -35,7 +35,7 @@ cmd_delete_group() {
     fi
 
     # Remove system group
-    print_status "Removing system group..."
+    print_info "Removing system group..."
     if getent group "$groupname" &>/dev/null; then
         groupdel "$groupname"
     fi
@@ -43,5 +43,5 @@ cmd_delete_group() {
     # Remove from state
     remove_from_state_object "groups" "$groupname"
 
-    print_status "Group '$groupname' deleted successfully!"
+    print_info "Group '$groupname' deleted successfully!"
 }

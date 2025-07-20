@@ -38,7 +38,7 @@ cmd_passwd() {
         fi
     fi
 
-    print_header "CHANGE PASSWORD" "Changing password for user: $username"
+    print_info "Changing password for user: $username"
 
     password=$(get_passwd)
 
@@ -50,13 +50,13 @@ cmd_passwd() {
 
     # Update system password if shell access enabled
     if [[ "$shell_access" == "true" ]]; then
-        print_status "Updating system password..."
+        print_info "Updating system password..."
         echo "$username:$new_password" | chpasswd
     fi
 
     # Update Samba password
-    print_status "Updating Samba password..."
+    print_info "Updating Samba password..."
     (echo "$new_password"; echo "$new_password") | smbpasswd -a -s "$username"
 
-    print_status "Password changed successfully for user '$username'!"
+    print_info "Password changed successfully for user '$username'!"
 }

@@ -17,7 +17,7 @@ cmd_modify_share() {
         exit 1
     fi
 
-    print_header "MODIFY SHARE" "Modifying share: $sharename"
+    print_info "Modifying share: $sharename"
 
     # Get current configuration
     local current_config
@@ -128,12 +128,12 @@ cmd_modify_share() {
     fi
 
     # Update file system permissions
-    print_status "Updating file system permissions..."
+    print_info "Updating file system permissions..."
     chown "$new_owner:$new_group" "$share_path"
     chmod "$new_perms" "$share_path"
 
     # Update Samba configuration
-    print_status "Updating Samba configuration..."
+    print_info "Updating Samba configuration..."
     backup_file "$SMB_CONF"
 
     # Remove old share section and add new one
@@ -174,5 +174,5 @@ EOF
 
     add_to_state_object "shares" "$sharename" "$updated_config"
 
-    print_status "Share '$sharename' modified successfully!"
+    print_info "Share '$sharename' modified successfully!"
 }

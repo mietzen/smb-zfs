@@ -33,7 +33,7 @@ cmd_install() {
         macos_optimized="true"
     fi
 
-    print_header "INSTALL" "Setting up Samba with ZFS integration"
+    print_info "Setting up Samba with ZFS integration"
     echo "Pool: $pool"
     echo "Server: $server_name"
     echo "Workgroup: $workgroup"
@@ -48,14 +48,14 @@ cmd_install() {
     fi
 
     # Update packages and install
-    print_status "Updating package list..."
+    print_info "Updating package list..."
     apt update
 
-    print_status "Installing required packages..."
+    print_info "Installing required packages..."
     apt install -y samba samba-common-bin avahi-daemon jq
 
     # Create ZFS datasets
-    print_status "Creating ZFS datasets..."
+    print_info "Creating ZFS datasets..."
     local homes_dataset="$pool/homes"
     local shared_dataset="$pool/shared"
 
@@ -72,19 +72,19 @@ cmd_install() {
     # Create smb_users group
     if ! getent group smb_users &>/dev/null; then
         groupadd smb_users
-        print_status "Created 'smb_users' group"
+        print_info "Created 'smb_users' group"
     fi
 
     chown root:smb_users "/$pool/shared"
 
     # Configure Samba
-    print_status "Configuring Samba..."
+    print_info "Configuring Samba..."
     backup_file "$SMB_CONF"
 
     create_smb_conf "$pool" "$server_name" "$workgroup" "$macos_optimized"
 
     # Configure Avahi
-    print_status "Configuring Avahi..."
+    print_info "Configuring Avahi..."
     backup_file "$AVAHI_SMB_SERVICE"
 
     create_avahi_conf "$server_name"
@@ -96,7 +96,7 @@ cmd_install() {
     fi
 
     # Start services
-    print_status "Starting services..."
+    print_info "Starting services..."
     systemctl enable smbd nmbd avahi-daemon
     systemctl restart smbd nmbd avahi-daemon
 
@@ -115,7 +115,7 @@ cmd_install() {
     local group_config="{\"description\": \"Samba Users Group\", \"members\": []}"
     add_to_state_object "groups" "smb_users" "$group_config"
 
-    print_status "Installation completed successfully!"
+    print_info "Installation completed successfully!"
     echo ""
     echo "Next steps:"
     echo "  - Create users: $SCRIPT_NAME create user <username>"

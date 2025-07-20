@@ -17,7 +17,7 @@ cmd_modify_group() {
         exit 1
     fi
 
-    print_header "MODIFY GROUP" "Modifying group: $groupname"
+    print_info "Modifying group: $groupname"
 
     # Get current members
     local current_members
@@ -50,7 +50,7 @@ cmd_modify_group() {
                 if ! echo "$members_array" | jq -e ". | index(\"$user\")" &>/dev/null; then
                     members_array=$(echo "$members_array" | jq ". + [\"$user\"]")
                 fi
-                print_status "Added user '$user' to group '$groupname'"
+                print_info "Added user '$user' to group '$groupname'"
             else
                 print_warning "User '$user' does not exist, skipping"
             fi
@@ -65,7 +65,7 @@ cmd_modify_group() {
             if id "$user" &>/dev/null; then
                 gpasswd -d "$user" "$groupname" 2>/dev/null || true
                 members_array=$(echo "$members_array" | jq "map(select(. != \"$user\"))")
-                print_status "Removed user '$user' from group '$groupname'"
+                print_info "Removed user '$user' from group '$groupname'"
             else
                 print_warning "User '$user' does not exist, skipping"
             fi
@@ -77,5 +77,5 @@ cmd_modify_group() {
     updated_config=$(echo "$state" | jq --argjson members "$members_array" ".groups[\"$groupname\"].members = \$members")
     write_state "$updated_config"
 
-    print_status "Group '$groupname' modified successfully!"
+    print_info "Group '$groupname' modified successfully!"
 }

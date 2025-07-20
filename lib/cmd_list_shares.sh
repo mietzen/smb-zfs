@@ -2,7 +2,7 @@
 cmd_list_shares() {
     check_initialized
 
-    print_header "SHARES" "Shares managed by $SCRIPT_NAME"
+    print_info "Shares managed by $SCRIPT_NAME"
 
     local state
     state=$(read_state)

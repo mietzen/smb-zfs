@@ -20,7 +20,7 @@ cmd_delete_share() {
     local dataset
     dataset=$(echo "$state" | jq -r ".shares[\"$sharename\"].dataset")
 
-    print_header "DELETE SHARE" "Removing share: $sharename"
+    print_info "Removing share: $sharename"
     print_warning "This will remove:"
     echo "  - Samba share configuration"
     echo "  - ZFS dataset: $dataset"
@@ -35,7 +35,7 @@ cmd_delete_share() {
     fi
 
     # Remove from Samba config
-    print_status "Removing from Samba configuration..."
+    print_info "Removing from Samba configuration..."
     backup_file "$SMB_CONF"
 
     # Remove share section from config (simple approach)
@@ -50,7 +50,7 @@ cmd_delete_share() {
     systemctl reload smbd
 
     # Remove ZFS dataset
-    print_status "Removing ZFS dataset..."
+    print_info "Removing ZFS dataset..."
     if zfs list "$dataset" &>/dev/null; then
         zfs destroy "$dataset"
     fi
@@ -58,5 +58,5 @@ cmd_delete_share() {
     # Remove from state
     remove_from_state_object "shares" "$sharename"
 
-    print_status "Share '$sharename' deleted successfully!"
+    print_info "Share '$sharename' deleted successfully!"
 }

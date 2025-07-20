@@ -2,7 +2,7 @@
 cmd_list_groups() {
     check_initialized
 
-    print_header "GROUPS" "Groups managed by $SCRIPT_NAME"
+    print_info "Groups managed by $SCRIPT_NAME"
 
     local state
     state=$(read_state)

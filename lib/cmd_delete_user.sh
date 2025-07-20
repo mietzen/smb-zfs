@@ -20,7 +20,7 @@ cmd_delete_user() {
     local pool
     pool=$(get_state_value "zfs_pool" "")
 
-    print_header "DELETE USER" "Removing user: $username"
+    print_info "Removing user: $username"
     print_warning "This will remove:"
     echo "  - System user account"
     echo "  - Samba user account"
@@ -36,19 +36,19 @@ cmd_delete_user() {
     fi
 
     # Remove from Samba
-    print_status "Removing from Samba..."
+    print_info "Removing from Samba..."
     if pdbedit -L | grep -q "^$username:"; then
         smbpasswd -x "$username"
     fi
 
     # Remove system user
-    print_status "Removing system user..."
+    print_info "Removing system user..."
     if id "$username" &>/dev/null; then
         userdel "$username"
     fi
 
     # Remove ZFS dataset
-    print_status "Removing ZFS dataset..."
+    print_info "Removing ZFS dataset..."
     if zfs list "$pool/homes/$username" &>/dev/null; then
         zfs destroy "$pool/homes/$username"
     fi
@@ -56,5 +56,5 @@ cmd_delete_user() {
     # Remove from state
     remove_from_state_object "users" "$username"
 
-    print_status "User '$username' deleted successfully!"
+    print_info "User '$username' deleted successfully!"
 }
