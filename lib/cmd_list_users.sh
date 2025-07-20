@@ -1,4 +1,5 @@
 # List users
+# TODO: check jq expression
 cmd_list_users() {
     check_initialized
 

@@ -1,4 +1,6 @@
 # Modify group
+# TODO: check jq expression
+# TODO: Use read -r -p
 cmd_modify_group() {
     local groupname="$1"
 

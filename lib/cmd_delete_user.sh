@@ -1,4 +1,5 @@
 # Delete user
+# TODO: Add --delete-data option to delete zfs dataset, don't delete data by default, give a more alarming note
 cmd_delete_user() {
     local username="$1"
 

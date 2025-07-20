@@ -1,4 +1,5 @@
 # List shares
+# TODO: check jq expression
 cmd_list_shares() {
     check_initialized
 

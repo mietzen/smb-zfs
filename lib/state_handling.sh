@@ -1,5 +1,9 @@
-
 # Initialize state file
+# TODO: write_state() should create a backup.
+# TODO: Use jq '.' "$STATE_FILE" or check return code
+
+
+
 init_state() {
     if [[ ! -f "$STATE_FILE" ]]; then
         cat > "$STATE_FILE" << 'EOF'

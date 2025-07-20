@@ -49,10 +49,10 @@ cmd_install() {
 
     # Update packages and install
     print_info "Updating package list..."
-    apt update
+    apt-get update
 
     print_info "Installing required packages..."
-    apt install -y samba samba-common-bin avahi-daemon jq
+    apt-get install -y samba samba-common-bin avahi-daemon jq
 
     # Create ZFS datasets
     print_info "Creating ZFS datasets..."

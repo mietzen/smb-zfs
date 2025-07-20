@@ -1,4 +1,8 @@
 # Uninstall
+# TODO: Add --delete-data option to delete zfs dataset, don't delete data by default, give a more alarming note
+# TODO: Add --delete-users option to delete users & groups, don't delete users & groups by default, give a more alarming note
+# TODO: Use read -r -p
+
 cmd_uninstall() {
     check_initialized
 
@@ -106,5 +110,5 @@ cmd_uninstall() {
 
     print_info "Uninstallation completed successfully!"
     echo "You may want to remove the samba packages manually if no longer needed:"
-    echo "  apt remove samba samba-common-bin avahi-daemon"
+    echo "  apt-get remove samba samba-common-bin avahi-daemon"
 }

@@ -1,4 +1,5 @@
 # List groups
+# TODO: check jq expression
 cmd_list_groups() {
     check_initialized
 

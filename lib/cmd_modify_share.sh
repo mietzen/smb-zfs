@@ -1,4 +1,6 @@
 # Modify share
+# TODO: check jq expression
+# TODO: Use read -r -p
 cmd_modify_share() {
     local sharename="$1"
 

@@ -1,4 +1,6 @@
 # Modify setup
+# TODO: check jq expression
+# TODO: Use read -r -p
 cmd_modify_setup() {
     check_initialized
 
