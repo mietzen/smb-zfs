@@ -13,13 +13,6 @@ STATE_FILE="/etc/smb-zfs.state"
 SMB_CONF="/etc/samba/smb.conf"
 AVAHI_SMB_SERVICE="/etc/avahi/services/smb.service"
 
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
-
 # Source lib
 for file in ./lib/*.sh; do
     source "$file"
@@ -32,9 +25,10 @@ Usage: $SCRIPT_NAME COMMAND [OPTIONS]
 
 Commands:
   install <POOL> [--macos]           Setup Samba with Avahi and ZFS integration
-  create user <USER> [--shell]      Create Linux and SMB user with ZFS home
+  create user <USER> [--shell]       Create Linux and SMB user with ZFS home
   create share <SHARE>               Create ZFS dataset and Samba share
-  create group <GROUP>               Create new user group
+  create group <GROUP> [--desc <DESC>] <USER1> <USER2> ...
+                                     Create new user group with optional description and users
   modify share <SHARE>               Modify existing share configuration
   modify group <GROUP>               Modify existing group membership
   modify setup                       Modify server configuration
@@ -47,14 +41,14 @@ Commands:
   uninstall                          Remove all configuration and cleanup
 
 Options:
-  --macos                           Optimize for macOS compatibility
-  --shell                           Allow shell access for user creation
   -h, --help                        Show this help message
 
 Examples:
   $SCRIPT_NAME install tank --macos
   $SCRIPT_NAME create user john --shell
   $SCRIPT_NAME create share projects
+  $SCRIPT_NAME create group admins --desc "System Administrators" admin1 admin2
+  $SCRIPT_NAME create group marketing
   $SCRIPT_NAME list users
   $SCRIPT_NAME delete user john
 
