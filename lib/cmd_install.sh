@@ -1,30 +1,31 @@
 # Install business logic
+# Performs the core installation and configuration steps without user interaction.
 install_business_logic() {
     local pool="$1"
-    local macos_optimized="$2"
-    local server_name=$(hostname)
-    local workgroup="WORKGROUP"
+    local server_name="$2"
+    local workgroup="$3"
+    local macos_optimized="$4"
+    local homes_mountpoint="$5"
 
-    # Update packages and install
+    # Update packages and install required software
     print_info "Updating package list..."
     apt-get update
 
     print_info "Installing required packages..."
     apt-get install -y samba samba-common-bin avahi-daemon jq
 
-    # Create ZFS datasets
+    # Create ZFS datasets if they don't exist
     print_info "Creating ZFS datasets..."
     local homes_dataset="$pool/homes"
-    local homes_mountpoint
 
     if ! zfs list "$homes_dataset" &>/dev/null; then
         zfs create "$homes_dataset"
     fi
-    # Use zfs get mountpoint to determine actual path
-    homes_mountpoint=$(zfs get -H -o value mountpoint "$homes_dataset")
+
+    # Set permissions on the homes mountpoint
     chmod 755 "$homes_mountpoint"
 
-    # Create smb_users group
+    # Create smb_users group if it doesn't exist
     if ! getent group smb_users &>/dev/null; then
         groupadd smb_users
         print_info "Created 'smb_users' group"
@@ -33,55 +34,43 @@ install_business_logic() {
     # Configure Samba
     print_info "Configuring Samba..."
     backup_file "$SMB_CONF"
-
     create_smb_conf "$pool" "$server_name" "$workgroup" "$macos_optimized"
 
-    # Configure Avahi
+    # Configure Avahi for service discovery
     print_info "Configuring Avahi..."
     backup_file "$AVAHI_SMB_SERVICE"
-
     create_avahi_conf "$server_name"
 
-    # Test configuration
+    # Test the new Samba configuration
     if ! testparm -s "$SMB_CONF" &>/dev/null; then
         print_error "Samba configuration test failed"
+        # Note: In a real script, you might want to restore the backup here.
         exit 1
     fi
 
-    # Start services
-    print_info "Starting services..."
+    # Enable and restart services
+    print_info "Starting and enabling services..."
     systemctl enable smbd nmbd avahi-daemon
     systemctl restart smbd nmbd avahi-daemon
 
-    # Update state
+    # Update the state file with installation details
     set_state_value "initialized" "true"
     set_state_value "zfs_pool" "$pool"
     set_state_value "server_name" "$server_name"
     set_state_value "workgroup" "$workgroup"
     set_state_value "macos_optimized" "$macos_optimized"
 
-    # Add built-in shares to state
-    local shared_config
-    shared_config=$(jq -n \
-                    --arg path "/$pool/shared" \
-                    --arg comment "Shared Files" \
-                    --arg browseable true \
-                    --arg read_only false \
-                    --arg valid_users "@smb_users" \
-                    '{path: $path, comment: $comment, browseable: ($browseable | fromjson), read_only: ($read_only | fromjson), valid_users: $valid_users}')
+    # Add built-in shares and groups to the state file
+    # Using single quotes to avoid escaping inner double quotes
+    local shared_config='{"path": "/'"$pool"'/shared", "comment": "Shared Files", "browseable": true, "read_only": false, "valid_users": "@smb_users"}'
     add_to_state_object "shares" "shared" "$shared_config"
 
-    # Add smb_users group to state
-    local group_config
-    group_config=$(jq -n \
-                   --arg description "Samba Users Group" \
-                   '{description: $description, members: []}')
+    local group_config='{"description": "Samba Users Group", "members": []}'
     add_to_state_object "groups" "smb_users" "$group_config"
 }
 
----
-
 # Install command
+# Guides the user through the initial setup process.
 cmd_install() {
     local pool="$1"
     local macos_opt="$2"
@@ -92,7 +81,7 @@ cmd_install() {
         exit 1
     fi
 
-    # Check if already initialized
+    # Check if the system has already been initialized
     local initialized
     initialized=$(get_state_value "initialized" "false")
     if [[ "$initialized" == "true" ]]; then
@@ -100,7 +89,7 @@ cmd_install() {
         exit 1
     fi
 
-    # Check if ZFS pool exists
+    # Check if the specified ZFS pool exists
     if ! zpool status "$pool" &>/dev/null; then
         print_error "ZFS pool '$pool' does not exist"
         exit 1
@@ -115,20 +104,20 @@ cmd_install() {
         macos_optimized="true"
     fi
 
+    # Check for existing homes dataset and get its mountpoint
     local homes_dataset="$pool/homes"
     local homes_mountpoint
-
+    local homes_exists=false
     if zfs list "$homes_dataset" &>/dev/null; then
+        homes_exists=true
+        # Get the actual mountpoint for the dataset
         homes_mountpoint=$(zfs get -H -o value mountpoint "$homes_dataset")
-        print_warning "ZFS dataset '$homes_dataset' already exists with mountpoint '$homes_mountpoint'."
-        echo "Do you want to continue? (y/N):"
-        read -r confirm
-        if ! [[ "$confirm" =~ ^[Yy]$ ]]; then
-            echo "Installation cancelled."
-            exit 0
-        fi
+    else
+        # If it doesn't exist, the mountpoint will be the default path
+        homes_mountpoint="/$pool/homes"
     fi
 
+    # Present installation plan to the user
     print_info "Setting up Samba with ZFS integration"
     echo ""
     echo "=== Summary ==="
@@ -137,14 +126,21 @@ cmd_install() {
     echo "Workgroup: $workgroup"
     echo "macOS optimized: $macos_optimized"
     echo ""
-    echo "Continue? (y/N):"
+
+    if [[ "$homes_exists" == "true" ]]; then
+        print_warning "Homes dataset '$homes_dataset' already exists at '$homes_mountpoint' and will be used."
+    fi
+
+    # Confirm with the user before proceeding
+    echo "Continue with installation? (y/N):"
     read -r confirm
     if ! [[ "$confirm" =~ ^[Yy]$ ]]; then
         echo "Installation cancelled."
         exit 0
     fi
 
-    install_business_logic "$pool" "$macos_optimized"
+    # Execute the installation logic
+    install_business_logic "$pool" "$server_name" "$workgroup" "$macos_optimized" "$homes_mountpoint"
 
     print_info "Installation completed successfully!"
     echo ""
