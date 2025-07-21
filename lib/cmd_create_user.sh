@@ -1,4 +1,5 @@
 # Create user
+# TODO: Extract the business logic from the guided cli prompts, for reuse in other intefaces, into a seperate bash function.
 # TODO: Check if all escaping in jq is needed
 # TODO: Use zfs get mountpoint to determine actual path, if home already exists, also print_warning and prompt if you want to continue
 # TODO: Show available groups from state, fail if group not in state

@@ -1,5 +1,5 @@
-
 # Create share
+# TODO: Extract the business logic from the guided cli prompts, for reuse in other intefaces, into a seperate bash function.
 # TODO: Check if all escaping in jq is needed
 # TODO: Use zfs get mountpoint to determine actual path, if share already exists, also print_warning and prompt if you want to continue
 # TODO: Show available groups and users from state, fail if user / group not in state

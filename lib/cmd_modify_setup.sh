@@ -1,4 +1,5 @@
 # Modify setup
+# TODO: Extract the business logic from the guided cli prompts, for reuse in other intefaces, into a seperate bash function.
 # TODO: check jq expression
 # TODO: Use read -r -p
 # TODO: Check if all escaping in jq is needed

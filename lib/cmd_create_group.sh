@@ -1,4 +1,5 @@
 # Create group
+# TODO: Extract the business logic from the guided cli prompts, for reuse in other intefaces, into a seperate bash function.
 # TODO: Check if all escaping in jq is needed
 # TODO: Dont use pos args for user handover prompt for them
 # TODO: Show available users from state, fail if user not in state

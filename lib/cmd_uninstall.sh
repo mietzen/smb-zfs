@@ -1,4 +1,5 @@
 # Uninstall
+# TODO: Extract the business logic from the guided cli prompts, for reuse in other intefaces, into a seperate bash function.
 cmd_uninstall() {
     check_initialized
 

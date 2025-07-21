@@ -1,4 +1,5 @@
 # Change password
+# TODO: Extract the business logic from the guided cli prompts, for reuse in other intefaces, into a seperate bash function.
 # TODO: Check if all escaping in jq is needed
 cmd_passwd() {
     local username="$1"

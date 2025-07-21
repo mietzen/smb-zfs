@@ -1,4 +1,5 @@
 # Delete user
+# TODO: Extract the business logic from the guided cli prompts, for reuse in other intefaces, into a seperate bash function.
 # TODO: Add --delete-data option to delete zfs dataset, don't delete data by default, give a more alarming note
 # TODO: Check if all escaping in jq is needed
 cmd_delete_user() {
