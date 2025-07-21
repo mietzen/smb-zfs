@@ -1,28 +1,72 @@
 # Uninstall
-# TODO: Add --delete-data option to delete zfs dataset, don't delete data by default, give a more alarming note
-# TODO: Add --delete-users option to delete users & groups, don't delete users & groups by default, give a more alarming note
-# TODO: Use read -r -p
-
 cmd_uninstall() {
     check_initialized
 
-    print_info "Removing all configuration"
-    print_warning "This will remove:"
-    echo "  - All Samba configuration"
-    echo "  - All Avahi configuration"
-    echo "  - All users created by this tool"
-    echo "  - All groups created by this tool"
-    echo "  - All ZFS datasets (HOME DIRECTORIES AND SHARES)"
-    echo "  - State file"
-    echo ""
-    print_error "THIS WILL DELETE ALL USER DATA!"
-    echo ""
+    local delete_data=false
+    local delete_users=false
 
-    echo "Are you absolutely sure? Type 'UNINSTALL' to confirm:"
-    read -r confirm
-    if [[ "$confirm" != "UNINSTALL" ]]; then
-        echo "Uninstallation cancelled."
-        exit 0
+    # Parse options
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            --delete-data)
+                delete_data=true
+                shift
+                ;;
+            --delete-users)
+                delete_users=true
+                shift
+                ;;
+            *)
+                print_error "Unknown option: $1"
+                echo "Usage: $0 uninstall [--delete-data] [--delete-users]"
+                exit 1
+                ;;
+        esac
+    done
+
+    print_info "Removing configuration"
+    print_warning "This will remove:"
+    echo " - All Samba configuration"
+    echo " - All Avahi configuration"
+    echo " - State file"
+
+    if [[ "$delete_users" == true ]]; then
+        echo " - All users created by this tool"
+        echo " - All groups created by this tool"
+    fi
+
+    if [[ "$delete_data" == true ]]; then
+        echo " - All ZFS datasets (HOME DIRECTORIES AND SHARES)"
+        echo ""
+        print_warning "⚠️  WARNING: THIS WILL PERMANENTLY DELETE ALL USER DATA! ⚠️"
+        echo ""
+        print_warning "All home directories and shared folders will be IRREVERSIBLY LOST!"
+        echo "Make sure you have backed up any important data before proceeding."
+    fi
+
+    if [[ "$delete_users" == true ]]; then
+        echo ""
+        print_warning "⚠️  WARNING: THIS WILL DELETE ALL USERS AND GROUPS! ⚠️"
+        echo ""
+        print_warning "All users created by this tool will be permanently removed!"
+        echo "This may affect system access and permissions."
+    fi
+
+    echo ""
+    if [[ "$delete_data" == true || "$delete_users" == true ]]; then
+        echo "Type 'I KNOW WHAT I AM DOING' to confirm this destructive operation:"
+        read -r -p "> " confirm
+        if [[ "$confirm" != "I KNOW WHAT I AM DOING" ]]; then
+            echo "Uninstallation cancelled."
+            exit 0
+        fi
+    else
+        echo "Type 'UNINSTALL' to confirm configuration removal:"
+        read -r -p "> " confirm
+        if [[ "$confirm" != "UNINSTALL" ]]; then
+            echo "Uninstallation cancelled."
+            exit 0
+        fi
     fi
 
     local pool
@@ -30,63 +74,73 @@ cmd_uninstall() {
     local state
     state=$(read_state)
 
-    # Remove all users
-    print_info "Removing users..."
-    echo "$state" | jq -r '.users | keys[]' | while read -r username; do
-        print_info "Removing user: $username"
-
-        # Remove from Samba
-        if pdbedit -L | grep -q "^$username:"; then
-            smbpasswd -x "$username" 2>/dev/null || true
-        fi
-
-        # Remove system user
-        if id "$username" &>/dev/null; then
-            userdel "$username" 2>/dev/null || true
-        fi
-
-        # Remove ZFS dataset
-        if zfs list "$pool/homes/$username" &>/dev/null; then
-            zfs destroy "$pool/homes/$username" 2>/dev/null || true
-        fi
-    done
-
-    # Remove all custom groups (keep smb_users for last)
-    print_info "Removing groups..."
-    echo "$state" | jq -r '.groups | keys[]' | while read -r groupname; do
-        if [[ "$groupname" != "smb_users" ]]; then
-            print_info "Removing group: $groupname"
-            if getent group "$groupname" &>/dev/null; then
-                groupdel "$groupname" 2>/dev/null || true
+    # Remove all users if requested
+    if [[ "$delete_users" == true ]]; then
+        print_info "Removing users..."
+        echo "$state" | jq -r '.users | keys[]' | while read -r username; do
+            print_info "Removing user: $username"
+            # Remove from Samba
+            if pdbedit -L | grep -q "^$username:"; then
+                smbpasswd -x "$username" 2>/dev/null || true
             fi
-        fi
-    done
-
-    # Remove all shares
-    print_info "Removing shares..."
-    echo "$state" | jq -r '.shares | keys[]' | while read -r sharename; do
-        if [[ "$sharename" != "shared" ]]; then
-            print_info "Removing share: $sharename"
-            local dataset
-            dataset=$(echo "$state" | jq -r ".shares[\"$sharename\"].dataset")
-            if zfs list "$dataset" &>/dev/null; then
-                zfs destroy "$dataset" 2>/dev/null || true
+            # Remove system user
+            if id "$username" &>/dev/null; then
+                userdel "$username" 2>/dev/null || true
             fi
-        fi
-    done
+        done
 
-    # Remove base ZFS datasets
-    print_info "Removing base ZFS datasets..."
-    if zfs list "$pool/shared" &>/dev/null; then
-        zfs destroy "$pool/shared" 2>/dev/null || true
-    fi
-    if zfs list "$pool/homes" &>/dev/null; then
-        zfs destroy "$pool/homes" 2>/dev/null || true
+        # Remove all custom groups (keep smb_users for last)
+        print_info "Removing groups..."
+        echo "$state" | jq -r '.groups | keys[]' | while read -r groupname; do
+            if [[ "$groupname" != "smb_users" ]]; then
+                print_info "Removing group: $groupname"
+                if getent group "$groupname" &>/dev/null; then
+                    groupdel "$groupname" 2>/dev/null || true
+                fi
+            fi
+        done
+
+        # Remove smb_users group
+        if getent group smb_users &>/dev/null; then
+            groupdel smb_users 2>/dev/null || true
+        fi
     fi
 
-    # Remove smb_users group
-    if getent group smb_users &>/dev/null; then
-        groupdel smb_users 2>/dev/null || true
+    # Remove ZFS datasets if requested
+    if [[ "$delete_data" == true ]]; then
+        # Remove user home datasets
+        print_info "Removing user home datasets..."
+        echo "$state" | jq -r '.users | keys[]' | while read -r username; do
+            if zfs list "$pool/homes/$username" &>/dev/null; then
+                print_info "Destroying dataset: $pool/homes/$username"
+                zfs destroy "$pool/homes/$username" 2>/dev/null || true
+            fi
+        done
+
+        # Remove all shares
+        print_info "Removing share datasets..."
+        echo "$state" | jq -r '.shares | keys[]' | while read -r sharename; do
+            if [[ "$sharename" != "shared" ]]; then
+                print_info "Removing share: $sharename"
+                local dataset
+                dataset=$(echo "$state" | jq -r ".shares[\"$sharename\"].dataset")
+                if zfs list "$dataset" &>/dev/null; then
+                    print_info "Destroying dataset: $dataset"
+                    zfs destroy "$dataset" 2>/dev/null || true
+                fi
+            fi
+        done
+
+        # Remove base ZFS datasets
+        print_info "Removing base ZFS datasets..."
+        if zfs list "$pool/shared" &>/dev/null; then
+            print_info "Destroying dataset: $pool/shared"
+            zfs destroy "$pool/shared" 2>/dev/null || true
+        fi
+        if zfs list "$pool/homes" &>/dev/null; then
+            print_info "Destroying dataset: $pool/homes"
+            zfs destroy "$pool/homes" 2>/dev/null || true
+        fi
     fi
 
     # Remove configuration files
@@ -108,7 +162,8 @@ cmd_uninstall() {
         rm -f "$STATE_FILE"
     fi
 
+    print_info "Uninstalling packages..."
+    apt-get auto-remove -y samba samba-common-bin avahi-daemon
+
     print_info "Uninstallation completed successfully!"
-    echo "You may want to remove the samba packages manually if no longer needed:"
-    echo "  apt-get remove samba samba-common-bin avahi-daemon"
 }
