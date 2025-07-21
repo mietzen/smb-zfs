@@ -1,6 +1,39 @@
+# Change password business logic function
+change_password_business_logic() {
+    local username="$1"
+    local new_password="$2"
+
+    check_initialized
+
+    # Check if user exists in state
+    local state
+    state=$(read_state)
+    if ! echo "$state" | jq -e ".users[\"$username\"]" &>/dev/null; then
+        print_error "User '$username' is not managed by this tool"
+        return 1
+    fi
+
+    print_info "Changing password for user: $username"
+
+    # Check if user has shell access
+    local shell_access
+    shell_access=$(echo "$state" | jq -r ".users[\"$username\"].shell_access")
+
+    # Update system password if shell access enabled
+    if [[ "$shell_access" == "true" ]]; then
+        print_info "Updating system password..."
+        echo "$username:$new_password" | chpasswd
+    fi
+
+    # Update Samba password
+    print_info "Updating Samba password..."
+    (echo "$new_password"; echo "$new_password") | smbpasswd -a -s "$username"
+
+    print_info "Password changed successfully for user '$username'!"
+    return 0
+}
+
 # Change password
-# TODO: Extract the business logic from the guided cli prompts, for reuse in other intefaces, into a seperate bash function.
-# TODO: Check if all escaping in jq is needed
 cmd_passwd() {
     local username="$1"
     local current_user
@@ -9,7 +42,6 @@ cmd_passwd() {
     # If no username provided, use current user
     if [[ -z "$username" ]]; then
         username="$current_user"
-
         # Check if current user is managed by this tool
         if [[ -f "$STATE_FILE" ]]; then
             local state
@@ -40,25 +72,10 @@ cmd_passwd() {
         fi
     fi
 
-    print_info "Changing password for user: $username"
+    # Get new password
+    local new_password
+    new_password=$(get_passwd)
 
-    password=$(get_passwd)
-
-    # Check if user has shell access
-    local state
-    state=$(read_state)
-    local shell_access
-    shell_access=$(echo "$state" | jq -r ".users[\"$username\"].shell_access")
-
-    # Update system password if shell access enabled
-    if [[ "$shell_access" == "true" ]]; then
-        print_info "Updating system password..."
-        echo "$username:$new_password" | chpasswd
-    fi
-
-    # Update Samba password
-    print_info "Updating Samba password..."
-    (echo "$new_password"; echo "$new_password") | smbpasswd -a -s "$username"
-
-    print_info "Password changed successfully for user '$username'!"
+    # Call business logic function
+    change_password_business_logic "$username" "$new_password"
 }
