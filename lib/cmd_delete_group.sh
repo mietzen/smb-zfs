@@ -1,4 +1,5 @@
 # Delete group
+# TODO: Check if all escaping in jq is needed
 cmd_delete_group() {
     local groupname="$1"
 

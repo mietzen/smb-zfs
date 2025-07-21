@@ -1,6 +1,7 @@
 # Modify setup
 # TODO: check jq expression
 # TODO: Use read -r -p
+# TODO: Check if all escaping in jq is needed
 cmd_modify_setup() {
     check_initialized
 
@@ -107,11 +108,6 @@ cmd_modify_setup() {
     force group = $group
 EOF
     done
-
-    # Update Avahi configuration
-    print_info "Updating Avahi configuration..."
-    backup_file "$AVAHI_SMB_SERVICE"
-    create_avahi_conf "$new_server_name"
 
     # Test and reload
     if ! testparm -s "$SMB_CONF" &>/dev/null; then

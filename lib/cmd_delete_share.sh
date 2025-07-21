@@ -1,5 +1,6 @@
 # Delete share
 # TODO: Add --delete-data option to delete zfs dataset, don't delete data by default, give a more alarming note
+# TODO: Check if all escaping in jq is needed
 cmd_delete_share() {
     local sharename="$1"
 

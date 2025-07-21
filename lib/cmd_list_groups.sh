@@ -1,5 +1,5 @@
 # List groups
-# TODO: check jq expression
+# TODO: Check if all escaping in jq is needed
 cmd_list_groups() {
     check_initialized
 

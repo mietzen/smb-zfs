@@ -1,5 +1,5 @@
 # List shares
-# TODO: check jq expression
+# TODO: Check if all escaping in jq is needed
 cmd_list_shares() {
     check_initialized
 

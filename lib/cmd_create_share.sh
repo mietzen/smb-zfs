@@ -1,5 +1,8 @@
 
 # Create share
+# TODO: Check if all escaping in jq is needed
+# TODO: Use zfs get mountpoint to determine actual path, if share already exists, also print_warning and prompt if you want to continue
+# TODO: Show available groups and users from state, fail if user / group not in state
 cmd_create_share() {
     local sharename="$1"
 
@@ -48,7 +51,7 @@ cmd_create_share() {
         owner="root"
     fi
 
-    echo "Enter group name [default: smb_users]:"
+    echo "Enter system group name [default: smb_users]:"
     read -r group
     if [[ -z "$group" ]]; then
         group="smb_users"
@@ -60,7 +63,7 @@ cmd_create_share() {
         perms="775"
     fi
 
-    echo "Valid users (comma-separated, @ for groups, or * for all) [default: @smb_users]:"
+    echo "Valid SMB users (comma-separated, @ for groups, or * for all) [default: @smb_users]:"
     read -r valid_users
     if [[ -z "$valid_users" ]]; then
         valid_users="@smb_users"
@@ -83,13 +86,11 @@ cmd_create_share() {
     fi
 
     local dataset_full="$pool/$dataset_path"
-    local mount_point="/$pool/$dataset_path"
 
     echo ""
     echo "=== Summary ==="
     echo "Share name: $sharename"
     echo "Dataset: $dataset_full"
-    echo "Mount point: $mount_point"
     echo "Owner: $owner:$group"
     echo "Permissions: $perms"
     echo "Valid users: $valid_users"
@@ -109,6 +110,8 @@ cmd_create_share() {
     if ! zfs list "$dataset_full" &>/dev/null; then
         zfs create "$dataset_full"
     fi
+
+    local mount_point="/$pool/$dataset_path"
 
     # Set permissions
     chown "$owner:$group" "$mount_point"

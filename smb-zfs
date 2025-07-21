@@ -1,13 +1,12 @@
 #!/bin/bash
 
-# smb-zfs - Complete ZFS Samba Management Tool
-# Version: 1.0
-# Author: System Administrator
-# Description: Unified tool for managing Samba shares on ZFS with state tracking
+# smb-zfs - ZFS Samba Management Tool
+# Source: https://github.com/mietzen/smb-zfs
+# MIT License
 
 set -e
 
-# Global variables
+VERSION="0.1.0"
 SCRIPT_NAME="smb-zfs"
 STATE_FILE="/etc/smb-zfs.state"
 SMB_CONF="/etc/samba/smb.conf"
@@ -42,6 +41,7 @@ Commands:
 
 Options:
   -h, --help                        Show this help message
+  -v, --version                     Show the version of $SCRIPT_NAME
 
 Examples:
   $SCRIPT_NAME install tank --macos
@@ -165,6 +165,10 @@ main() {
             check_root
             cmd_uninstall "$@"
             ;;
+        "-v"|"--version")
+            echo "${VERSION}"
+            exit 0
+            ;;
         "-h"|"--help")
             show_usage
             exit 0
@@ -177,5 +181,4 @@ main() {
     esac
 }
 
-# Run main function with all arguments
 main "$@"

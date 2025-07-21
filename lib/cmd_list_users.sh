@@ -1,5 +1,5 @@
 # List users
-# TODO: check jq expression
+# TODO: Check if all escaping in jq is needed
 cmd_list_users() {
     check_initialized
 

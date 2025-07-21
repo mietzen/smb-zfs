@@ -1,4 +1,7 @@
 # Create user
+# TODO: Check if all escaping in jq is needed
+# TODO: Use zfs get mountpoint to determine actual path, if home already exists, also print_warning and prompt if you want to continue
+# TODO: Show available groups from state, fail if group not in state
 cmd_create_user() {
     local username="$1"
     local shell_opt="$2"

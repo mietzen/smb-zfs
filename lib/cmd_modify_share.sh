@@ -1,6 +1,7 @@
 # Modify share
 # TODO: check jq expression
 # TODO: Use read -r -p
+# TODO: Check if all escaping in jq is needed
 cmd_modify_share() {
     local sharename="$1"
 

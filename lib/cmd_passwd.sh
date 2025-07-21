@@ -1,4 +1,5 @@
 # Change password
+# TODO: Check if all escaping in jq is needed
 cmd_passwd() {
     local username="$1"
     local current_user
