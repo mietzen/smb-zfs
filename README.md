@@ -29,10 +29,10 @@ options:
 
  ## Prerequisites
 
-- A Debian-based Linux distribution.
+- Debian 12 - Bookworm or newer
+- ZFS installed with a pre-existing pool
 - Python >= 3.10
-- ZFS installed with a pre-existing pool.
-- sudo privileges.
+- sudo privileges
 
 ## Installation
 
