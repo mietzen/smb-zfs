@@ -16,9 +16,6 @@ from . import (
 
 class SmbZfsManager:
     def __init__(self, state_path=STATE_FILE):
-        if os.geteuid() != 0:
-            raise SmbZfsError("This script must be run as root.")
-
         self._system = System()
         self._zfs = ZFS(self._system)
         self._state = StateManager(state_path)

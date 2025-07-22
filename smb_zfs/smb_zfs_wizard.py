@@ -4,7 +4,8 @@ import argparse
 import getpass
 import sys
 import socket
-from smb_zfs_module import SmbZfsManager, SmbZfsError
+from importlib import metadata
+from . import SmbZfsManager, SmbZfsError
 
 CONFIRM_PHRASE = "I KNOW WHAT I AM DOING"
 
@@ -204,9 +205,8 @@ def main():
         prog="smb-zfs-wizard",
         description="An interactive wizard to manage Samba on a ZFS-backed system."
     )
-    # This version argument is for demonstration; in a real package, you'd get it from the module.
-    parser.add_argument('-v', '--version', action='version', version=f'%(prog)s 0.1.0')
-
+    parser.add_argument('-v', '--version',action='version',
+                        version=f'{metadata.version("smb-zfs")}')
     subparsers = parser.add_subparsers(dest='command', help='Available commands')
     # If no command is given, print help and exit.
     subparsers.required = True

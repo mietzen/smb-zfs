@@ -22,8 +22,10 @@ smb-zfs = "smb_zfs.cli:main"
 smb-zfs-wizard = "smb_zfs.smb_zfs_wizard:main"
 
 [build-system]
-requires = ["setuptools>=77.0"]
+requires = ["setuptools>=77.0", "setuptools-scm>=8"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
 packages = ["smb_zfs"]
+
+[tool.setuptools_scm]

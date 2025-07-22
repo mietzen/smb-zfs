@@ -4,7 +4,9 @@ import argparse
 import getpass
 import sys
 import socket
+import os
 
+from importlib import metadata
 from . import (
     SmbZfsManager,
     SmbZfsError
@@ -32,9 +34,14 @@ def confirm_destructive_action(prompt, yes_flag):
     response = input("> ")
     return response == CONFIRM_PHRASE
 
+def check_root():
+    if os.geteuid() != 0:
+            raise SmbZfsError("This script must be run as root.")
+
 @handle_exception
 def cmd_install(manager, args):
     """Handler for the 'install' command."""
+    check_root()
     server_name = args.server_name or socket.gethostname()
     workgroup = args.workgroup or "WORKGROUP"
 
@@ -76,6 +83,7 @@ def cmd_create_user(manager, args):
         print(f"  - Update state file")
         return
 
+    check_root()
     result = manager.create_user(args.user, password, args.shell, groups)
     print(result)
 
@@ -92,6 +100,7 @@ def cmd_create_share(manager, args):
         print(f"  - Update state file")
         return
 
+    check_root()
     result = manager.create_share(
         name=args.share,
         dataset_path=args.dataset,
@@ -119,6 +128,7 @@ def cmd_create_group(manager, args):
         print(f"  - Update state file")
         return
 
+    check_root()
     result = manager.create_group(args.group, args.description, users)
     print(result)
 
@@ -140,6 +150,7 @@ def cmd_delete_user(manager, args):
             print("Operation cancelled.", file=sys.stderr)
             return
 
+    check_root()
     result = manager.delete_user(args.user, args.delete_data)
     print(result)
 
@@ -161,6 +172,7 @@ def cmd_delete_share(manager, args):
             print("Operation cancelled.", file=sys.stderr)
             return
 
+    check_root()
     result = manager.delete_share(args.share, args.delete_data)
     print(result)
 
@@ -174,6 +186,7 @@ def cmd_delete_group(manager, args):
         print(f"  - Update state file")
         return
 
+    check_root()
     result = manager.delete_group(args.group)
     print(result)
 
@@ -203,6 +216,8 @@ def cmd_passwd(manager, args):
         print("Passwords do not match.", file=sys.stderr)
         sys.exit(1)
 
+    if getpass.getuser() != args.user:
+        check_root()
     result = manager.change_password(args.user, password)
     print(result)
 
@@ -214,6 +229,7 @@ def cmd_uninstall(manager, args):
         print("Operation cancelled.", file=sys.stderr)
         return
 
+    check_root()
     result = manager.uninstall(args.delete_data, args.delete_users)
     print(result)
 
@@ -224,8 +240,8 @@ def main():
         description="A tool to manage Samba on a ZFS-backed system.",
         epilog="All commands can be run with flags. If a required flag is omitted, the script will prompt for the value interactively."
     )
-    parser.add_argument('-v', '--version', action='version', version=f'%(prog)s {SmbZfsManager()._state.get("version", "N/A")}')
-
+    parser.add_argument('-v', '--version',action='version',
+                        version=f'{metadata.version("smb-zfs")}')
     subparsers = parser.add_subparsers(dest='command', required=True, help='Available commands')
 
     # --- Install ---

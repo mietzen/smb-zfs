@@ -14,7 +14,6 @@ class StateManager:
 
     def _initialize_state_file(self):
         initial_state = {
-            "version": "1.0",
             "initialized": False,
             "zfs_pool": None,
             "server_name": None,
