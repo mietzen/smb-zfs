@@ -9,8 +9,9 @@ It provides a reliable interface for common administrative tasks through two mod
  ## Prerequisites
 
 - A Debian-based Linux distribution.
+- Python >= 3.10
 - ZFS installed with a pre-existing pool.
-- Root or sudo privileges.
+- sudo privileges.
 
 ## Installation
 
