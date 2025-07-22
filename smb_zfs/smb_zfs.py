@@ -59,21 +59,7 @@ class SmbZfsManager:
             {
                 "description": "Samba Users Group",
                 "members": [],
-                "created": datetime.utcnow().isoformat(),
-            },
-        )
-
-        shared_mountpoint = self._zfs.get_mountpoint(f"{pool}/shared")
-        self._state.set_item(
-            "shares",
-            "shared",
-            {
-                "path": shared_mountpoint,
-                "comment": "Shared Files",
-                "browseable": True,
-                "read_only": False,
-                "valid_users": "@smb_users",
-                "created": datetime.utcnow().isoformat(),
+                "created": datetime.now(datetime.timezone.utc).isoformat(),
             },
         )
         return "Installation completed successfully."
@@ -87,7 +73,7 @@ class SmbZfsManager:
 
         pool = self._state.get("zfs_pool")
         home_dataset = f"{pool}/homes/{username}"
-        home_mountpoint = f"/{home_dataset}"
+        home_mountpoint = self._zfs.get_mountpoint(home_dataset)
 
         self._system.add_system_user(
             username,
@@ -120,7 +106,7 @@ class SmbZfsManager:
             "shell_access": allow_shell,
             "home_dataset": home_dataset,
             "groups": user_groups,
-            "created": datetime.utcnow().isoformat(),
+            "created": datetime.now(datetime.timezone.utc).isoformat(),
         }
         self._state.set_item("users", username, user_config)
         return f"User '{username}' created successfully."
@@ -162,7 +148,7 @@ class SmbZfsManager:
         group_config = {
             "description": description or f"{groupname} Group",
             "members": added_members,
-            "created": datetime.utcnow().isoformat(),
+            "created": datetime.now(datetime.timezone.utc).isoformat(),
         }
         self._state.set_item("groups", groupname, group_config)
         return f"Group '{groupname}' created successfully."
@@ -231,7 +217,7 @@ class SmbZfsManager:
             "valid_users": valid_users or f"@{group}",
             "read_only": read_only,
             "browseable": browseable,
-            "created": datetime.utcnow().isoformat(),
+            "created": datetime.now(datetime.timezone.utc).isoformat(),
         }
         self._state.set_item("shares", name, state_data)
         return f"Share '{name}' created successfully."

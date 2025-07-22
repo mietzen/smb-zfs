@@ -55,15 +55,6 @@ class ConfigGenerator:
     directory mask = 0700
     valid users = %S
     force user = %S
-
-[shared]
-    comment = Shared Files
-    path = /{pool}/shared
-    browseable = yes
-    read only = no
-    create mask = 0664
-    directory mask = 0775
-    valid users = @smb_users
 """
         with open(SMB_CONF, "w") as f:
             f.write(content)
