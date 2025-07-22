@@ -42,7 +42,7 @@ Install the package
 sudo apt update
 sudo apt install pipx
 sudo pipx ensurepath --global
-sudo pipx install git+https://github.com/mietzen/smb-zfs.git
+sudo pipx install smb-zfs
 ```
 
 This makes the `smb-zfs` and `smb-zfs-wizard` commands available system-wide.
