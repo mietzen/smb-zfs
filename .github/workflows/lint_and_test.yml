@@ -1,0 +1,46 @@
+name: Python Lint and Test
+
+on:
+  pull_request:
+    branches:
+      - 'main'
+
+jobs:
+  Test:
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+      fail-fast: false
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff
+      - name: Lint with ruff
+        env:
+          PY_VER: ${{ matrix.python-version }}
+        run: |
+          # stop the build if there are Python syntax errors or undefined names
+          PY_VER=$(echo py${PY_VER} | tr -d '.')
+          ruff check --output-format=github --ignore=E501 --exclude=__init__.py --target-version=${PY_VER} ./smb_zfs
+
+  Check-Test:
+    if: ${{ always() }}
+    runs-on: ubuntu-24.04
+    needs:
+      - Test
+    steps:
+      - run: |
+          result="${{ needs.Test.result }}"
+          if [[ $result == "success" || $result == "skipped" ]]; then
+            exit 0
+          else
+            exit 1
+          fi
