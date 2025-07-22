@@ -4,6 +4,7 @@ import grp
 
 from . import SmbZfsError, SMB_CONF
 
+
 class System:
     """A helper class for executing system commands."""
 
@@ -41,78 +42,80 @@ class System:
             return False
 
     def add_system_user(self, username, home_dir=None, shell=None):
-        cmd = ['useradd']
+        cmd = ["useradd"]
         if home_dir:
-            cmd.extend(['-d', home_dir, '-m'])
+            cmd.extend(["-d", home_dir, "-m"])
         else:
-            cmd.append('-M')
+            cmd.append("-M")
         if shell:
-            cmd.extend(['-s', shell])
+            cmd.extend(["-s", shell])
         else:
-            cmd.extend(['-s', '/usr/sbin/nologin'])
+            cmd.extend(["-s", "/usr/sbin/nologin"])
         cmd.append(username)
         self._run(cmd)
 
     def delete_system_user(self, username):
-        self._run(['userdel', username])
+        self._run(["userdel", username])
 
     def add_system_group(self, groupname):
-        self._run(['groupadd', groupname])
+        self._run(["groupadd", groupname])
 
     def delete_system_group(self, groupname):
-        self._run(['groupdel', groupname])
+        self._run(["groupdel", groupname])
 
     def add_user_to_group(self, username, groupname):
-        self._run(['usermod', '-a', '-G', groupname, username])
+        self._run(["usermod", "-a", "-G", groupname, username])
 
     def remove_user_from_group(self, username, groupname):
-        self._run(['gpasswd', '-d', username, groupname])
+        self._run(["gpasswd", "-d", username, groupname])
 
     def set_system_password(self, username, password):
-        self._run(['chpasswd'], input_data=f"{username}:{password}")
+        self._run(["chpasswd"], input_data=f"{username}:{password}")
 
     def add_samba_user(self, username, password):
-        self._run(['smbpasswd', '-a', '-s', username], input_data=f"{password}\n{password}")
-        self._run(['smbpasswd', '-e', username])
+        self._run(
+            ["smbpasswd", "-a", "-s", username], input_data=f"{password}\n{password}"
+        )
+        self._run(["smbpasswd", "-e", username])
 
     def delete_samba_user(self, username):
         if self.samba_user_exists(username):
-            self._run(['smbpasswd', '-x', username])
+            self._run(["smbpasswd", "-x", username])
 
     def samba_user_exists(self, username):
-        result = self._run(['pdbedit', '-L'])
+        result = self._run(["pdbedit", "-L"])
         return f"{username}:" in result.stdout
 
     def set_samba_password(self, username, password):
-        self._run(['smbpasswd', '-s', username], input_data=f"{password}\n{password}")
+        self._run(["smbpasswd", "-s", username], input_data=f"{password}\n{password}")
 
     def test_samba_config(self):
-        self._run(['testparm', '-s', SMB_CONF])
+        self._run(["testparm", "-s", SMB_CONF])
 
     def reload_samba(self):
-        self._run(['systemctl', 'reload', 'smbd', 'nmbd'])
+        self._run(["systemctl", "reload", "smbd", "nmbd"])
 
     def restart_services(self):
-        self._run(['systemctl', 'restart', 'smbd', 'nmbd', 'avahi-daemon'])
+        self._run(["systemctl", "restart", "smbd", "nmbd", "avahi-daemon"])
 
     def enable_services(self):
-        self._run(['systemctl', 'enable', 'smbd', 'nmbd', 'avahi-daemon'])
+        self._run(["systemctl", "enable", "smbd", "nmbd", "avahi-daemon"])
 
     def stop_services(self):
-        self._run(['systemctl', 'stop', 'smbd', 'nmbd', 'avahi-daemon'], check=False)
+        self._run(["systemctl", "stop", "smbd", "nmbd", "avahi-daemon"], check=False)
 
     def disable_services(self):
-        self._run(['systemctl', 'disable', 'smbd', 'nmbd', 'avahi-daemon'], check=False)
+        self._run(["systemctl", "disable", "smbd", "nmbd", "avahi-daemon"], check=False)
 
     def apt_update(self):
-        self._run(['apt-get', 'update'])
+        self._run(["apt-get", "update"])
 
     def apt_install(self, packages):
-        cmd = ['apt-get', 'install', '-y']
+        cmd = ["apt-get", "install", "-y"]
         cmd.extend(packages)
         self._run(cmd)
 
     def apt_purge(self, packages):
-        cmd = ['apt-get', 'purge', '-y', '--auto-remove']
+        cmd = ["apt-get", "purge", "-y", "--auto-remove"]
         cmd.extend(packages)
         self._run(cmd)

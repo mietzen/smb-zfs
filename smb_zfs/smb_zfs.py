@@ -10,7 +10,9 @@ from . import (
     System,
     ZFS,
     SmbZfsError,
-    STATE_FILE, SMB_CONF, AVAHI_SMB_SERVICE
+    STATE_FILE,
+    SMB_CONF,
+    AVAHI_SMB_SERVICE,
 )
 
 
@@ -30,14 +32,14 @@ class SmbZfsManager:
             raise SmbZfsError("System is already initialized.")
 
         self._system.apt_update()
-        self._system.apt_install(['samba', 'samba-common-bin', 'avahi-daemon'])
+        self._system.apt_install(["samba", "samba-common-bin", "avahi-daemon"])
 
         self._zfs.create_dataset(f"{pool}/homes")
         homes_mountpoint = self._zfs.get_mountpoint(f"{pool}/homes")
         os.chmod(homes_mountpoint, 0o755)
 
-        if not self._system.group_exists('smb_users'):
-            self._system.add_system_group('smb_users')
+        if not self._system.group_exists("smb_users"):
+            self._system.add_system_group("smb_users")
 
         self._config.create_smb_conf(pool, server_name, workgroup, macos_optimized)
         self._config.create_avahi_conf()
@@ -51,21 +53,29 @@ class SmbZfsManager:
         self._state.set("workgroup", workgroup)
         self._state.set("macos_optimized", macos_optimized)
 
-        self._state.set_item("groups", "smb_users", {
-            "description": "Samba Users Group",
-            "members": [],
-            "created": datetime.utcnow().isoformat()
-        })
+        self._state.set_item(
+            "groups",
+            "smb_users",
+            {
+                "description": "Samba Users Group",
+                "members": [],
+                "created": datetime.utcnow().isoformat(),
+            },
+        )
 
         shared_mountpoint = self._zfs.get_mountpoint(f"{pool}/shared")
-        self._state.set_item("shares", "shared", {
-            "path": shared_mountpoint,
-            "comment": "Shared Files",
-            "browseable": True,
-            "read_only": False,
-            "valid_users": "@smb_users",
-            "created": datetime.utcnow().isoformat()
-        })
+        self._state.set_item(
+            "shares",
+            "shared",
+            {
+                "path": shared_mountpoint,
+                "comment": "Shared Files",
+                "browseable": True,
+                "read_only": False,
+                "valid_users": "@smb_users",
+                "created": datetime.utcnow().isoformat(),
+            },
+        )
         return "Installation completed successfully."
 
     def create_user(self, username, password, allow_shell=False, groups=None):
@@ -79,18 +89,25 @@ class SmbZfsManager:
         home_dataset = f"{pool}/homes/{username}"
         home_mountpoint = f"/{home_dataset}"
 
-        self._system.add_system_user(username, home_dir=home_mountpoint if allow_shell else None,
-                                     shell='/bin/bash' if allow_shell else '/usr/sbin/nologin')
+        self._system.add_system_user(
+            username,
+            home_dir=home_mountpoint if allow_shell else None,
+            shell="/bin/bash" if allow_shell else "/usr/sbin/nologin",
+        )
 
         self._zfs.create_dataset(home_dataset)
-        os.chown(home_mountpoint, pwd.getpwnam(username).pw_uid, pwd.getpwnam(username).pw_gid)
+        os.chown(
+            home_mountpoint,
+            pwd.getpwnam(username).pw_uid,
+            pwd.getpwnam(username).pw_gid,
+        )
         os.chmod(home_mountpoint, 0o700)
 
         if allow_shell:
             self._system.set_system_password(username, password)
 
         self._system.add_samba_user(username, password)
-        self._system.add_user_to_group(username, 'smb_users')
+        self._system.add_user_to_group(username, "smb_users")
 
         user_groups = []
         if groups:
@@ -103,7 +120,7 @@ class SmbZfsManager:
             "shell_access": allow_shell,
             "home_dataset": home_dataset,
             "groups": user_groups,
-            "created": datetime.utcnow().isoformat()
+            "created": datetime.utcnow().isoformat(),
         }
         self._state.set_item("users", username, user_config)
         return f"User '{username}' created successfully."
@@ -119,14 +136,14 @@ class SmbZfsManager:
             self._system.delete_system_user(username)
 
         if delete_data:
-            self._zfs.destroy_dataset(user_info['home_dataset'])
+            self._zfs.destroy_dataset(user_info["home_dataset"])
 
         self._state.delete_item("users", username)
         return f"User '{username}' deleted successfully."
 
     def create_group(self, groupname, description="", members=None):
         self._check_initialized()
-        if not re.match(r'^[a-zA-Z0-9._-]+$', groupname):
+        if not re.match(r"^[a-zA-Z0-9._-]+$", groupname):
             raise SmbZfsError("Group name contains invalid characters.")
         if self._state.get_item("groups", groupname):
             raise SmbZfsError(f"Group '{groupname}' is already managed by this tool.")
@@ -145,7 +162,7 @@ class SmbZfsManager:
         group_config = {
             "description": description or f"{groupname} Group",
             "members": added_members,
-            "created": datetime.utcnow().isoformat()
+            "created": datetime.utcnow().isoformat(),
         }
         self._state.set_item("groups", groupname, group_config)
         return f"Group '{groupname}' created successfully."
@@ -163,8 +180,18 @@ class SmbZfsManager:
         self._state.delete_item("groups", groupname)
         return f"Group '{groupname}' deleted successfully."
 
-    def create_share(self, name, dataset_path, owner, group, perms="0775",
-                     comment="", valid_users=None, read_only=False, browseable=True):
+    def create_share(
+        self,
+        name,
+        dataset_path,
+        owner,
+        group,
+        perms="0775",
+        comment="",
+        valid_users=None,
+        read_only=False,
+        browseable=True,
+    ):
         self._check_initialized()
         if self._state.get_item("shares", name):
             raise SmbZfsError(f"Share '{name}' already exists.")
@@ -188,7 +215,7 @@ class SmbZfsManager:
             "read_only": read_only,
             "valid_users": valid_users or f"@{group}",
             "owner": owner,
-            "group": group
+            "group": group,
         }
         self._config.add_share_to_conf(share_data)
         self._system.test_samba_config()
@@ -204,7 +231,7 @@ class SmbZfsManager:
             "valid_users": valid_users or f"@{group}",
             "read_only": read_only,
             "browseable": browseable,
-            "created": datetime.utcnow().isoformat()
+            "created": datetime.utcnow().isoformat(),
         }
         self._state.set_item("shares", name, state_data)
         return f"Share '{name}' created successfully."
@@ -220,7 +247,7 @@ class SmbZfsManager:
         self._system.reload_samba()
 
         if delete_data:
-            self._zfs.destroy_dataset(share_info['dataset'])
+            self._zfs.destroy_dataset(share_info["dataset"])
 
         self._state.delete_item("shares", name)
         return f"Share '{name}' deleted successfully."
@@ -259,17 +286,17 @@ class SmbZfsManager:
                 if self._system.user_exists(username):
                     self._system.delete_system_user(username)
             for groupname in groups:
-                 if self._system.group_exists(groupname):
+                if self._system.group_exists(groupname):
                     self._system.delete_system_group(groupname)
-            if self._system.group_exists('smb_users'):
-                self._system.delete_system_group('smb_users')
+            if self._system.group_exists("smb_users"):
+                self._system.delete_system_group("smb_users")
 
         if delete_data and pool:
             for user_info in users.values():
-                self._zfs.destroy_dataset(user_info['home_dataset'])
+                self._zfs.destroy_dataset(user_info["home_dataset"])
             for share_info in shares.values():
-                if 'dataset' in share_info:
-                    self._zfs.destroy_dataset(share_info['dataset'])
+                if "dataset" in share_info:
+                    self._zfs.destroy_dataset(share_info["dataset"])
             self._zfs.destroy_dataset(f"{pool}/homes")
 
         self._system.stop_services()
@@ -279,5 +306,5 @@ class SmbZfsManager:
             if os.path.exists(f):
                 os.remove(f)
 
-        self._system.apt_purge(['samba', 'samba-common-bin', 'avahi-daemon'])
+        self._system.apt_purge(["samba", "samba-common-bin", "avahi-daemon"])
         return "Uninstallation completed successfully."

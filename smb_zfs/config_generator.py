@@ -7,10 +7,11 @@ from . import SMB_CONF, AVAHI_SMB_SERVICE
 
 
 class ConfigGenerator:
-
     def _backup_file(self, file_path):
         if os.path.exists(file_path):
-            backup_path = f"{file_path}.backup.{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            backup_path = (
+                f"{file_path}.backup.{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            )
             shutil.copy(file_path, backup_path)
 
     def create_smb_conf(self, pool, server_name, workgroup, macos_optimized):
@@ -64,7 +65,7 @@ class ConfigGenerator:
     directory mask = 0775
     valid users = @smb_users
 """
-        with open(SMB_CONF, 'w') as f:
+        with open(SMB_CONF, "w") as f:
             f.write(content)
 
     def create_avahi_conf(self):
@@ -86,35 +87,34 @@ class ConfigGenerator:
 </service-group>
 """
         os.makedirs(os.path.dirname(AVAHI_SMB_SERVICE), exist_ok=True)
-        with open(AVAHI_SMB_SERVICE, 'w') as f:
+        with open(AVAHI_SMB_SERVICE, "w") as f:
             f.write(content)
 
     def add_share_to_conf(self, share_data):
-        with open(SMB_CONF, 'a') as f:
+        with open(SMB_CONF, "a") as f:
             f.write(f"""
-[{share_data['name']}]
-    comment = {share_data['comment']}
-    path = {share_data['path']}
-    browseable = {'yes' if share_data['browseable'] else 'no'}
-    read only = {'yes' if share_data['read_only'] else 'no'}
+[{share_data["name"]}]
+    comment = {share_data["comment"]}
+    path = {share_data["path"]}
+    browseable = {"yes" if share_data["browseable"] else "no"}
+    read only = {"yes" if share_data["read_only"] else "no"}
     create mask = 0664
     directory mask = 0775
-    valid users = {share_data['valid_users']}
-    force user = {share_data['owner']}
-    force group = {share_data['group']}
+    valid users = {share_data["valid_users"]}
+    force user = {share_data["owner"]}
+    force group = {share_data["group"]}
 """)
 
     def remove_share_from_conf(self, share_name):
         self._backup_file(SMB_CONF)
-        with open(SMB_CONF, 'r') as f:
+        with open(SMB_CONF, "r") as f:
             lines = f.readlines()
 
-        share_pattern = re.compile(
-            r'^\s*\[{}\]\s*$'.format(re.escape(share_name)))
-        section_pattern = re.compile(r'^\s*\[.*\]\s*$')
+        share_pattern = re.compile(r"^\s*\[{}\]\s*$".format(re.escape(share_name)))
+        section_pattern = re.compile(r"^\s*\[.*\]\s*$")
 
         in_section = False
-        with open(SMB_CONF, 'w') as f:
+        with open(SMB_CONF, "w") as f:
             for line in lines:
                 if share_pattern.match(line):
                     in_section = True

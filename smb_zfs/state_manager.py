@@ -4,6 +4,7 @@ import shutil
 
 from . import SmbZfsError
 
+
 class StateManager:
     def __init__(self, state_path):
         self.path = state_path
@@ -24,18 +25,22 @@ class StateManager:
             "groups": {},
         }
         try:
-            with open(self.path, 'w') as f:
+            with open(self.path, "w") as f:
                 json.dump(initial_state, f, indent=2)
             os.chmod(self.path, 0o600)
         except IOError as e:
-            raise SmbZfsError(f"Failed to initialize state file at {self.path}: {e}") from e
+            raise SmbZfsError(
+                f"Failed to initialize state file at {self.path}: {e}"
+            ) from e
 
     def load(self):
         try:
-            with open(self.path, 'r') as f:
+            with open(self.path, "r") as f:
                 self.data = json.load(f)
         except (IOError, json.JSONDecodeError) as e:
-            raise SmbZfsError(f"Failed to read or parse state file {self.path}: {e}") from e
+            raise SmbZfsError(
+                f"Failed to read or parse state file {self.path}: {e}"
+            ) from e
 
     def save(self):
         try:
@@ -43,7 +48,7 @@ class StateManager:
             if os.path.exists(self.path):
                 shutil.copy(self.path, backup_path)
 
-            with open(self.path, 'w') as f:
+            with open(self.path, "w") as f:
                 json.dump(self.data, f, indent=2)
             os.chmod(self.path, 0o600)
         except IOError as e:
