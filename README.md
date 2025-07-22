@@ -6,7 +6,7 @@ A command-line tool for simplifying Samba share management on ZFS-backed systems
 
 It provides a reliable interface for common administrative tasks through two modes: a standard CLI `smb-zfs` for scripting and an interactive wizard `smb-zfs-wizard` for guided setup.
 
-```Shell
+```text
 $ smb-zfs -h                                                                                                  
 usage: smb-zfs [-h] [-v] {install,create,delete,list,passwd,uninstall} ...
 
@@ -38,10 +38,12 @@ options:
 
 Install the package
 
-    sudo apt update
-    sudo apt install pipx
-    sudo pipx ensurepath --global
-    sudo pipx install git+https://github.com/mietzen/smb-zfs.git
+```Shell
+sudo apt update
+sudo apt install pipx
+sudo pipx ensurepath --global
+sudo pipx install git+https://github.com/mietzen/smb-zfs.git
+```
 
 This makes the `smb-zfs` and `smb-zfs-wizard` commands available system-wide.
 
