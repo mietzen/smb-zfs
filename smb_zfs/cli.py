@@ -270,7 +270,6 @@ def main():
     parser = argparse.ArgumentParser(
         prog=PROG_NAME,
         description="A tool to manage Samba on a ZFS-backed system.",
-        epilog="All commands can be run with flags. If a required flag is omitted, the script will prompt for the value interactively.",
     )
     parser.add_argument(
         "-v", "--version", action="version", version=f"{metadata.version('smb-zfs')}"

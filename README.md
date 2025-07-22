@@ -6,6 +6,27 @@ A command-line tool for simplifying Samba share management on ZFS-backed systems
 
 It provides a reliable interface for common administrative tasks through two modes: a standard CLI `smb-zfs` for scripting and an interactive wizard `smb-zfs-wizard` for guided setup.
 
+```Shell
+$ smb-zfs -h                                                                                                  
+usage: smb-zfs [-h] [-v] {install,create,delete,list,passwd,uninstall} ...
+
+A tool to manage Samba on a ZFS-backed system.
+
+positional arguments:
+  {install,create,delete,list,passwd,uninstall}
+                        Available commands
+    install             Initial setup of Samba, ZFS, and Avahi.
+    create              Create a new user, share, or group.
+    delete              Remove a user, share, or group.
+    list                List all items of a specific type.
+    passwd              Change a user's password.
+    uninstall           Remove all configurations, data, and packages.
+
+options:
+  -h, --help            show this help message and exit
+  -v, --version         show program's version number and exit
+```
+
  ## Prerequisites
 
 - A Debian-based Linux distribution.
