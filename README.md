@@ -7,7 +7,7 @@ A command-line tool for simplifying Samba share management on ZFS-backed systems
 It provides a reliable interface for common administrative tasks through two modes: a standard CLI `smb-zfs` for scripting and an interactive wizard `smb-zfs-wizard` for guided setup.
 
 ```text
-$ smb-zfs -h                                                                                                  
+$ smb-zfs -h
 usage: smb-zfs [-h] [-v] {install,create,delete,list,passwd,uninstall} ...
 
 A tool to manage Samba on a ZFS-backed system.
@@ -29,9 +29,9 @@ options:
 
  ## Prerequisites
 
-- Debian 12 - Bookworm or newer
+- Debian 12 - Bookworm
 - ZFS installed with a pre-existing pool
-- Python >= 3.10
+- Python 3.11
 - `sudo` privileges
 
 ## Installation
@@ -40,9 +40,8 @@ Install package
 
 ```Shell
 sudo apt update
-sudo apt install pipx samba samba-common-bin avahi-daemon -y
-sudo pipx ensurepath --global
-sudo pipx install smb-zfs
+sudo apt install -y pipx samba samba-common-bin avahi-daemon
+sudo PIPX_HOME=/opt/pipx PIPX_BIN_DIR=/usr/local/bin pipx install smb-zfs
 ```
 
 This makes the `smb-zfs` and `smb-zfs-wizard` commands available system-wide.
