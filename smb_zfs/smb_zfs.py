@@ -17,7 +17,7 @@ from . import (
 
 
 class SmbZfsManager:
-    def __init__(self, state_path=f"/etc/{NAME}.state"):
+    def __init__(self, state_path=f"/var/lib/{NAME}.state"):
         self._system = System()
         self._zfs = Zfs(self._system)
         self._state = StateManager(state_path)
