@@ -29,3 +29,12 @@ build-backend = "setuptools.build_meta"
 packages = ["smb_zfs"]
 
 [tool.setuptools_scm]
+
+[tool.stdeb]
+# This field lists the Debian packages that must be installed for your
+# application to run. The ${python3:Depends} variable is a placeholder
+# that stdeb will replace with the correct Python 3 dependency (e.g., python3).
+Depends = "samba, zfs-utils, avahi-daemon, ${python3:Depends}"
+
+# This tells stdeb to use the Python 3 interpreter.
+Python3-Version = ">="

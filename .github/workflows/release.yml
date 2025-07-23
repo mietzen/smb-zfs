@@ -1,0 +1,75 @@
+name: Build & Upload Python Package
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  Deploy-to-PyPI:
+    runs-on: ubuntu-24.04
+    permissions:
+      id-token: write
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install build
+    - name: Build package
+      run: python -m build --wheel
+    - name: Publish package to PyPI
+      uses: pypa/gh-action-pypi-publish@release/v1
+
+  Build-Debian-Package:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install Debian build dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y python3-setuptools python3-stdeb build-essential devscripts
+
+    - name: Create setup.py shim for stdeb
+      run: |
+        cat << EOF > setup.py
+        #!/usr/bin/env python
+
+        from setuptools import setup
+
+        setup(
+            data_files=[
+                (
+                    '/usr/share/bash-completion/completions',
+                    [
+                        'completion/smb-zfs-completion.sh',
+                        'completion/smb-zfs-wizard-completion.sh'
+                    ]
+                )
+            ]
+        )
+        EOF
+
+    - name: Build Debian source package
+      run: python3 setup.py --command-packages=stdeb.command bdist_deb
+
+    - name: Build .deb package
+      run: |
+        cd deb_dist/smb-zfs-*/
+        debuild -us -uc
+
+    - name: Upload .deb to Release
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./deb_dist/*.deb
+        asset_name: smb-zfs_${{ github.ref_name }}_all.deb
+        asset_content_type: application/vnd.debian.binary-package
