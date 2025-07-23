@@ -31,11 +31,12 @@ class SmbZfsManager:
         if self._state.is_initialized():
             raise SmbZfsError("System is already set up.")
 
-        required_commands = ["zfs", "samba", "smbpasswd", "avahi-daemon"]
-        for cmd in required_commands:
-            if not self._system.command_exists(cmd):
+        # Check for required Debian packages instead of commands
+        required_packages = ["zfs-utils", "samba", "samba-common-bin", "avahi-daemon"]
+        for pkg in required_packages:
+            if not self._system.is_package_installed(pkg):
                 raise SmbZfsError(
-                    f"Required command '{cmd}' not found. Please install the necessary packages first."
+                    f"Required package '{pkg}' is not installed. Please install it first."
                 )
 
         self._zfs.create_dataset(f"{pool}/homes")
@@ -77,7 +78,7 @@ class SmbZfsManager:
 
         pool = self._state.get("zfs_pool")
         home_dataset = f"{pool}/homes/{username}"
-        
+
         self._zfs.create_dataset(home_dataset)
         home_mountpoint = self._zfs.get_mountpoint(home_dataset)
 
@@ -277,7 +278,7 @@ class SmbZfsManager:
         for key, value in kwargs.items():
             if value is not None:
                 share_info[key] = value
-        
+
         # Apply filesystem changes if needed
         if any(k in kwargs for k in ['owner', 'group', 'permissions']):
             mount_point = share_info['path']
@@ -307,12 +308,12 @@ class SmbZfsManager:
 
     def modify_setup(self, **kwargs):
         self._check_initialized()
-        
+
         # Update state with any new values
         for key, value in kwargs.items():
             if value is not None:
                 self._state.set(key, value)
-        
+
         # Regenerate smb.conf with new global settings
         pool = self._state.get("zfs_pool")
         server_name = self._state.get("server_name")
@@ -364,7 +365,7 @@ class SmbZfsManager:
         pool = self._state.get("zfs_pool")
         users = self.list_items("users")
         groups = self.list_items("groups")
-        
+
         if delete_users_and_groups:
             for username in users:
                 if self._system.samba_user_exists(username):

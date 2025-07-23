@@ -29,9 +29,14 @@ class System:
             )
             raise SmbZfsError(error_message) from e
 
-    def command_exists(self, command):
-        """Checks if a command exists on the system."""
-        return shutil.which(command) is not None
+    def is_package_installed(self, package_name):
+        """Checks if a Debian package is installed using dpkg-query."""
+        # Use check=False to handle cases where the package is not found
+        result = self._run(
+            ["dpkg-query", "--show", "--showformat=${db:Status-Status}", package_name],
+            check=False
+        )
+        return result.returncode == 0 and result.stdout.strip() == "installed"
 
     def user_exists(self, username):
         try:
