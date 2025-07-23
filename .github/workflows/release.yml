@@ -31,14 +31,16 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
 
     - name: Install Debian build dependencies
       run: |
         apt-get update
         apt-get install -y python3-stdeb build-essential devscripts git dh-python python3-setuptools
 
-    - name: Build Debian source package
-      run: python3 setup.py --command-packages=stdeb.command bdist_deb
+    - name: Generate Debian source control files
+      run: python3 setup.py --command-packages=stdeb.command sdist_dsc
 
     - name: Build .deb package
       run: |
