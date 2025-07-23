@@ -25,6 +25,7 @@ jobs:
 
   Build-Debian-Package:
     runs-on: ubuntu-24.04
+    container: debian:12-slim
     permissions:
       contents: write
     steps:
@@ -33,8 +34,8 @@ jobs:
 
     - name: Install Debian build dependencies
       run: |
-        sudo apt-get update
-        sudo apt-get install -y python3-setuptools python3-stdeb build-essential devscripts
+        apt-get update
+        apt-get install -y python3-setuptools python3-stdeb build-essential devscripts
 
     - name: Create setup.py shim for stdeb
       run: |
