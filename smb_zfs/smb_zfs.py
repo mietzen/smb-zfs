@@ -32,7 +32,7 @@ class SmbZfsManager:
             raise SmbZfsError("System is already set up.")
 
         # Check for required Debian packages instead of commands
-        required_packages = ["zfs-utils", "samba", "samba-common-bin", "avahi-daemon"]
+        required_packages = ["zfsutils-linux", "samba", "avahi-daemon"]
         for pkg in required_packages:
             if not self._system.is_package_installed(pkg):
                 raise SmbZfsError(
