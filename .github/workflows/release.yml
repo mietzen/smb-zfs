@@ -38,7 +38,7 @@ jobs:
       env:
         GH_TOKEN: ${{ github.token }}
       run: |
-        git clone ${{ github.repositoryUrl }} .
+        git clone https://github.com/${{ github.repository }} .
         git checkout ${{ github.ref_name }}
     - name: Generate Debian source control files
       run: python3 setup.py --command-packages=stdeb.command sdist_dsc
