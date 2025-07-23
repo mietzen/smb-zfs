@@ -35,7 +35,7 @@ jobs:
     - name: Install Debian build dependencies
       run: |
         apt-get update
-        apt-get install -y python3-setuptools python3-stdeb build-essential devscripts
+        apt-get install -y python3-stdeb build-essential devscripts git dh-python python3-setuptools
 
     - name: Create setup.py shim for stdeb
       run: |
