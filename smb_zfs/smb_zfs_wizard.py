@@ -55,10 +55,7 @@ def confirm_destructive_action(message):
     return False
 
 
-
-
-
-def wizard_install(manager, args=None):
+def wizard_setup(manager, args=None):
     print("\n--- Initial System Setup Wizard ---")
     try:
         pool = prompt("Enter the name of the ZFS pool to use")
@@ -78,8 +75,8 @@ def wizard_install(manager, args=None):
         print(f" - Workgroup: {workgroup}")
         print(f" - macOS Optimized: {macos_optimized}")
 
-        if prompt_yes_no("Proceed with installation?", default="y"):
-            result = manager.install(pool, server_name, workgroup, macos_optimized)
+        if prompt_yes_no("Proceed with setup?", default="y"):
+            result = manager.setup(pool, server_name, workgroup, macos_optimized)
             print(f"\nSuccess: {result}")
     except (SmbZfsError, ValueError) as e:
         print(f"\nError: {e}", file=sys.stderr)
@@ -223,8 +220,8 @@ def wizard_delete_group(manager, args=None):
         print(f"\nError: {e}", file=sys.stderr)
 
 
-def wizard_uninstall(manager, args=None):
-    print("\n--- Uninstall Wizard ---")
+def wizard_remove(manager, args=None):
+    print("\n--- Remove Setup Wizard ---")
     try:
         delete_data = prompt_yes_no(
             "Delete ALL ZFS datasets created by this tool (user homes, shares)?",
@@ -234,9 +231,9 @@ def wizard_uninstall(manager, args=None):
             "Delete ALL users and groups created by this tool?", default="n"
         )
 
-        message = "This will remove all configurations, packages, and potentially all user data and users created by this tool."
+        message = "This will remove all configurations and potentially all user data and users created by this tool."
         if confirm_destructive_action(message):
-            result = manager.uninstall(delete_data, delete_users)
+            result = manager.remove(delete_data, delete_users)
             print(f"\nSuccess: {result}")
     except SmbZfsError as e:
         print(f"\nError: {e}", file=sys.stderr)
@@ -252,12 +249,10 @@ def main():
         "-v", "--version", action="version", version=f"{metadata.version(NAME)}"
     )
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
-    # If no command is given, print help and exit.
     subparsers.required = True
 
-    
-    p_install = subparsers.add_parser("install", help="Start the initial setup wizard.")
-    p_install.set_defaults(func=wizard_install)
+    p_setup = subparsers.add_parser("setup", help="Start the initial setup wizard.")
+    p_setup.set_defaults(func=wizard_setup)
 
     p_create = subparsers.add_parser("create", help="Start a creation wizard.")
     create_sub = p_create.add_subparsers(dest="create_type", required=True)
@@ -281,16 +276,15 @@ def main():
     )
     p_delete_group.set_defaults(func=wizard_delete_group)
 
-    p_uninstall = subparsers.add_parser(
-        "uninstall", help="Start the uninstallation wizard."
+    p_remove = subparsers.add_parser(
+        "remove", help="Start the removal wizard."
     )
-    p_uninstall.set_defaults(func=wizard_uninstall)
+    p_remove.set_defaults(func=wizard_remove)
 
     args = parser.parse_args()
 
     try:
         manager = SmbZfsManager()
-        # Call the function associated with the chosen command
         args.func(manager, args)
     except SmbZfsError as e:
         print(f"Initialization Error: {e}", file=sys.stderr)

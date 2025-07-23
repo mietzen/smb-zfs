@@ -26,7 +26,7 @@ _smb_zfs_completion() {
     _get_comp_words_by_ref -n : cur prev words cword
 
     # Define all possible commands, sub-commands, and global options.
-    local commands="install create modify list delete passwd uninstall"
+    local commands="setup create modify list delete passwd remove"
     local create_opts="user share group"
     local modify_opts="user share group setup"
     local delete_opts="user share group"
@@ -41,7 +41,7 @@ _smb_zfs_completion() {
 
     local command="${words[1]}"
     case "${command}" in
-        install)
+        setup)
             local opts="--pool --server-name --workgroup --macos --dry-run"
             COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
             ;;
@@ -122,7 +122,7 @@ _smb_zfs_completion() {
                 COMPREPLY=( $(compgen -W "$(_get_managed_items users)" -- "${cur}") )
             fi
             ;;
-        uninstall)
+        remove)
             local opts="--delete-data --delete-users --yes"
             COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
             ;;

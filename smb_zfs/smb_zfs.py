@@ -12,7 +12,7 @@ from . import (
     Zfs,
     AVAHI_SMB_SERVICE,
     SMB_CONF,
-    NAME
+    NAME,
 )
 
 
@@ -25,14 +25,18 @@ class SmbZfsManager:
 
     def _check_initialized(self):
         if not self._state.is_initialized():
-            raise SmbZfsError("System not initialized. Run 'install' first.")
+            raise SmbZfsError("System not set up. Run 'setup' first.")
 
-    def install(self, pool, server_name, workgroup, macos_optimized=False):
+    def setup(self, pool, server_name, workgroup, macos_optimized=False):
         if self._state.is_initialized():
-            raise SmbZfsError("System is already initialized.")
+            raise SmbZfsError("System is already set up.")
 
-        self._system.apt_update()
-        self._system.apt_install(["samba", "samba-common-bin", "avahi-daemon"])
+        required_commands = ["zfs", "samba", "smbpasswd", "avahi-daemon"]
+        for cmd in required_commands:
+            if not self._system.command_exists(cmd):
+                raise SmbZfsError(
+                    f"Required command '{cmd}' not found. Please install the necessary packages first."
+                )
 
         self._zfs.create_dataset(f"{pool}/homes")
         homes_mountpoint = self._zfs.get_mountpoint(f"{pool}/homes")
@@ -62,7 +66,7 @@ class SmbZfsManager:
                 "created": datetime.now(datetime.timezone.utc).isoformat(),
             },
         )
-        return "Installation completed successfully."
+        return "Setup completed successfully."
 
     def create_user(self, username, password, allow_shell=False, groups=None):
         self._check_initialized()
@@ -73,6 +77,8 @@ class SmbZfsManager:
 
         pool = self._state.get("zfs_pool")
         home_dataset = f"{pool}/homes/{username}"
+        
+        self._zfs.create_dataset(home_dataset)
         home_mountpoint = self._zfs.get_mountpoint(home_dataset)
 
         self._system.add_system_user(
@@ -81,7 +87,6 @@ class SmbZfsManager:
             shell="/bin/bash" if allow_shell else "/usr/sbin/nologin",
         )
 
-        self._zfs.create_dataset(home_dataset)
         os.chown(
             home_mountpoint,
             pwd.getpwnam(username).pw_uid,
@@ -256,9 +261,9 @@ class SmbZfsManager:
             raise SmbZfsError("Invalid category to list.")
         return self._state.list_items(category)
 
-    def uninstall(self, delete_data=False, delete_users_and_groups=False):
+    def remove(self, delete_data=False, delete_users_and_groups=False):
         if not self._state.is_initialized():
-            return "System is not installed, nothing to do."
+            return "System is not set up, nothing to do."
 
         pool = self._state.get("zfs_pool")
         users = self.list_items("users")
@@ -292,5 +297,4 @@ class SmbZfsManager:
             if os.path.exists(f):
                 os.remove(f)
 
-        self._system.apt_purge(["samba", "samba-common-bin", "avahi-daemon"])
-        return "Uninstallation completed successfully."
+        return "Removal completed successfully."

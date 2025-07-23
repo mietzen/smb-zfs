@@ -43,8 +43,8 @@ def check_root():
 
 
 @handle_exception
-def cmd_install(manager, args):
-    """Handler for the 'install' command."""
+def cmd_setup(manager, args):
+    """Handler for the 'setup' command."""
     check_root()
     server_name = args.server_name or socket.gethostname()
     workgroup = args.workgroup or "WORKGROUP"
@@ -52,7 +52,7 @@ def cmd_install(manager, args):
     if args.dry_run:
         print("--- Dry Run ---")
         print("Would perform the following actions:")
-        print("  - Install packages: samba, samba-common-bin, avahi-daemon")
+        print("  - Check for required binaries: zfs, samba, smbpasswd, avahi-daemon")
         print(f"  - Create ZFS dataset: {args.pool}/homes")
         print("  - Create system group: smb_users")
         print(f"  - Generate {manager._config.SMB_CONF} with:")
@@ -65,7 +65,7 @@ def cmd_install(manager, args):
         print(f"  - Initialize state file at {manager._state.path}")
         return
 
-    result = manager.install(args.pool, server_name, workgroup, args.macos)
+    result = manager.setup(args.pool, server_name, workgroup, args.macos)
     print(result)
 
 
@@ -252,15 +252,15 @@ def cmd_passwd(manager, args):
 
 
 @handle_exception
-def cmd_uninstall(manager, args):
-    """Handler for the 'uninstall' command."""
-    prompt = "This will remove all configurations, packages, and potentially all user data and users created by this tool."
+def cmd_remove(manager, args):
+    """Handler for the 'remove' command."""
+    prompt = "This will remove all configurations and potentially all user data and users created by this tool."
     if not confirm_destructive_action(prompt, args.yes):
         print("Operation cancelled.", file=sys.stderr)
         return
 
     check_root()
-    result = manager.uninstall(args.delete_data, args.delete_users)
+    result = manager.remove(args.delete_data, args.delete_users)
     print(result)
 
 
@@ -277,27 +277,27 @@ def main():
     )
 
     
-    p_install = subparsers.add_parser(
-        "install", help="Initial setup of Samba, ZFS, and Avahi."
+    p_setup = subparsers.add_parser(
+        "setup", help="Initial setup of Samba, ZFS, and Avahi."
     )
-    p_install.add_argument(
+    p_setup.add_argument(
         "--pool", required=True, help="The name of the ZFS pool to use."
     )
-    p_install.add_argument(
+    p_setup.add_argument(
         "--server-name", help="The server's NetBIOS name (default: hostname)."
     )
-    p_install.add_argument(
+    p_setup.add_argument(
         "--workgroup", help="The workgroup name (default: WORKGROUP)."
     )
-    p_install.add_argument(
+    p_setup.add_argument(
         "--macos", action="store_true", help="Enable macOS compatibility optimizations."
     )
-    p_install.add_argument(
+    p_setup.add_argument(
         "--dry-run",
         action="store_true",
         help="Don't change anything just summarize the changes",
     )
-    p_install.set_defaults(func=cmd_install)
+    p_setup.set_defaults(func=cmd_setup)
 
     
     p_create = subparsers.add_parser(
@@ -450,25 +450,25 @@ def main():
     p_passwd.set_defaults(func=cmd_passwd)
 
     
-    p_uninstall = subparsers.add_parser(
-        "uninstall", help="Remove all configurations, data, and packages."
+    p_remove = subparsers.add_parser(
+        "remove", help="Remove all configurations and data."
     )
-    p_uninstall.add_argument(
+    p_remove.add_argument(
         "--delete-data",
         action="store_true",
         help="Permanently delete all associated ZFS datasets.",
     )
-    p_uninstall.add_argument(
+    p_remove.add_argument(
         "--delete-users",
         action="store_true",
         help="Permanently delete all users and groups created by this tool.",
     )
-    p_uninstall.add_argument(
+    p_remove.add_argument(
         "--yes",
         action="store_true",
         help="Assume 'yes' to destructive confirmation prompts.",
     )
-    p_uninstall.set_defaults(func=cmd_uninstall)
+    p_remove.set_defaults(func=cmd_remove)
 
     args = parser.parse_args()
 

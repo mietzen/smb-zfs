@@ -32,15 +32,15 @@ options:
 - Debian 12 - Bookworm or newer
 - ZFS installed with a pre-existing pool
 - Python >= 3.10
-- sudo privileges
+- `sudo` privileges
 
 ## Installation
 
-Install the package
+Install package
 
 ```Shell
 sudo apt update
-sudo apt install pipx
+sudo apt install pipx samba samba-common-bin avahi-daemon -y
 sudo pipx ensurepath --global
 sudo pipx install smb-zfs
 ```
@@ -78,3 +78,15 @@ sudo smb-zfs-wizard create user
 ```
 
 For a full list of commands, use the `--help` flag with any command.
+
+## Uninstallation
+
+Install the package
+
+```Shell
+sudo smb-zfs-wizard remove
+sudo pipx remove smb-zfs
+
+# Remove apt pkgs
+sudo apt remove pipx samba samba-common-bin avahi-daemon
+```

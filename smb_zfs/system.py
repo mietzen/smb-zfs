@@ -1,8 +1,10 @@
 import grp
 import pwd
 import subprocess
+import shutil
 
-from . import SmbZfsError, SMB_CONF
+from .errors import SmbZfsError
+from .const import SMB_CONF
 
 
 class System:
@@ -26,6 +28,10 @@ class System:
                 f"Stderr: {e.stderr.strip()}"
             )
             raise SmbZfsError(error_message) from e
+
+    def command_exists(self, command):
+        """Checks if a command exists on the system."""
+        return shutil.which(command) is not None
 
     def user_exists(self, username):
         try:
@@ -106,16 +112,3 @@ class System:
 
     def disable_services(self):
         self._run(["systemctl", "disable", "smbd", "nmbd", "avahi-daemon"], check=False)
-
-    def apt_update(self):
-        self._run(["apt-get", "update"])
-
-    def apt_install(self, packages):
-        cmd = ["apt-get", "install", "-y"]
-        cmd.extend(packages)
-        self._run(cmd)
-
-    def apt_purge(self, packages):
-        cmd = ["apt-get", "purge", "-y", "--auto-remove"]
-        cmd.extend(packages)
-        self._run(cmd)

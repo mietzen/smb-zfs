@@ -14,7 +14,7 @@ _smb_zfs_wizard_completion() {
     _get_comp_words_by_ref -n : cur prev words cword
 
     # Define all possible commands and sub-commands.
-    local commands="install create delete uninstall"
+    local commands="setup create delete remove"
     local create_opts="user share group"
     local delete_opts="user share group"
     local global_opts="-h --help -v --version"
