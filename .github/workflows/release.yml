@@ -36,12 +36,15 @@ jobs:
       with:
         python-version: '3.12'
 
-    - name: Install build dependencies
+    - name: Install pip build dependencies
+      run: |
+        pip install --upgrade pip
+        pip install stdeb setuptools
+
+    - name: Install apt build dependencies
       run: |
         sudo apt-get update
         sudo apt-get install -y build-essential devscripts git dh-python
-        pip install --upgrade pip
-        pip install stdeb setuptools
 
     - name: Generate Debian source control files
       run: python3 setup.py --command-packages=stdeb.command sdist_dsc
