@@ -29,18 +29,30 @@ jobs:
     permissions:
       contents: write
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-
-    - name: Install Debian build dependencies
+    - name: Install build dependencies
       run: |
         apt-get update
-        apt-get install -y python3-stdeb build-essential devscripts git dh-python python3-setuptools
+        apt-get install -y python3-stdeb build-essential devscripts git dh-python
 
+    - name: Checkout code
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        git clone ${{ github.repositoryUrl }} .
+        git checkout ${{ github.ref_name }}
     - name: Generate Debian source control files
       run: python3 setup.py --command-packages=stdeb.command sdist_dsc
+
+    - name: Create Debian changelog and set version
+      env:
+        # Set environment variables for dch using the GitHub context
+        DEBEMAIL: "github.nstein@mailbox.org"
+        DEBFULLNAME: "Nils Stein"
+      run: |
+        cd deb_dist/smb-zfs-*/
+        dch --create --package smb-zfs --newversion "${{ github.ref_name }}-1" "New release."
+        # Set debhelper compatibility level to 13 to avoid warnings
+        echo 13 > debian/compat
 
     - name: Build .deb package
       run: |
@@ -53,6 +65,6 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ github.event.release.upload_url }}
-        asset_path: ./deb_dist/*.deb
+        asset_path: deb_dist/*.deb
         asset_name: smb-zfs_${{ github.ref_name }}_all.deb
         asset_content_type: application/vnd.debian.binary-package
