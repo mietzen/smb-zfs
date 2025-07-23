@@ -37,26 +37,6 @@ jobs:
         apt-get update
         apt-get install -y python3-stdeb build-essential devscripts git dh-python python3-setuptools
 
-    - name: Create setup.py shim for stdeb
-      run: |
-        cat << EOF > setup.py
-        #!/usr/bin/env python
-
-        from setuptools import setup
-
-        setup(
-            data_files=[
-                (
-                    '/usr/share/bash-completion/completions',
-                    [
-                        'completion/smb-zfs-completion.sh',
-                        'completion/smb-zfs-wizard-completion.sh'
-                    ]
-                )
-            ]
-        )
-        EOF
-
     - name: Build Debian source package
       run: python3 setup.py --command-packages=stdeb.command bdist_deb
 
