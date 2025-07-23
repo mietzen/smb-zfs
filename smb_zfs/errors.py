@@ -1,4 +1,5 @@
+
 class SmbZfsError(Exception):
-    """Custom exception for smb-zfs errors."""
+    """Custom exception for module errors."""
 
     pass

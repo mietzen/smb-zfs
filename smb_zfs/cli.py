@@ -7,10 +7,8 @@ import socket
 import sys
 
 from importlib import metadata
-from . import SmbZfsManager, SmbZfsError
+from . import SmbZfsManager, SmbZfsError, CONFIRM_PHRASE, NAME
 
-PROG_NAME = "smb-zfs"
-CONFIRM_PHRASE = "I KNOW WHAT I AM DOING"
 
 
 def handle_exception(func):
@@ -268,11 +266,11 @@ def cmd_uninstall(manager, args):
 
 def main():
     parser = argparse.ArgumentParser(
-        prog=PROG_NAME,
+        prog=NAME,
         description="A tool to manage Samba on a ZFS-backed system.",
     )
     parser.add_argument(
-        "-v", "--version", action="version", version=f"{metadata.version('smb-zfs')}"
+        "-v", "--version", action="version", version=f"{metadata.version(NAME)}"
     )
     subparsers = parser.add_subparsers(
         dest="command", required=True, help="Available commands"

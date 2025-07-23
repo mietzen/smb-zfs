@@ -5,9 +5,7 @@ import getpass
 import socket
 import sys
 from importlib import metadata
-from . import SmbZfsManager, SmbZfsError
-
-CONFIRM_PHRASE = "I KNOW WHAT I AM DOING"
+from . import SmbZfsManager, SmbZfsError, CONFIRM_PHRASE, NAME
 
 
 def prompt(message, default=None):
@@ -247,11 +245,11 @@ def wizard_uninstall(manager, args=None):
 def main():
     """Main function to run the wizard."""
     parser = argparse.ArgumentParser(
-        prog="smb-zfs-wizard",
+        prog=f"{NAME}-wizard",
         description="An interactive wizard to manage Samba on a ZFS-backed system.",
     )
     parser.add_argument(
-        "-v", "--version", action="version", version=f"{metadata.version('smb-zfs')}"
+        "-v", "--version", action="version", version=f"{metadata.version(NAME)}"
     )
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
     # If no command is given, print help and exit.

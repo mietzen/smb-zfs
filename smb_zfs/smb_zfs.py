@@ -12,12 +12,12 @@ from . import (
     Zfs,
     AVAHI_SMB_SERVICE,
     SMB_CONF,
-    STATE_FILE,
+    NAME
 )
 
 
 class SmbZfsManager:
-    def __init__(self, state_path=STATE_FILE):
+    def __init__(self, state_path=f"/etc/{NAME}.state"):
         self._system = System()
         self._zfs = Zfs(self._system)
         self._state = StateManager(state_path)
@@ -288,7 +288,7 @@ class SmbZfsManager:
         self._system.stop_services()
         self._system.disable_services()
 
-        for f in [SMB_CONF, AVAHI_SMB_SERVICE, STATE_FILE]:
+        for f in [SMB_CONF, AVAHI_SMB_SERVICE, self._state.path]:
             if os.path.exists(f):
                 os.remove(f)
 
