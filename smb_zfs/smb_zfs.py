@@ -64,7 +64,7 @@ class SmbZfsManager:
             {
                 "description": "Samba Users Group",
                 "members": [],
-                "created": datetime.now(datetime.timezone.utc).isoformat(),
+                "created": datetime.utcnow().isoformat(),
             },
         )
         return "Setup completed successfully."
@@ -112,7 +112,7 @@ class SmbZfsManager:
             "shell_access": allow_shell,
             "home_dataset": home_dataset,
             "groups": user_groups,
-            "created": datetime.now(datetime.timezone.utc).isoformat(),
+            "created": datetime.utcnow().isoformat(),
         }
         self._state.set_item("users", username, user_config)
         return f"User '{username}' created successfully."
@@ -154,7 +154,7 @@ class SmbZfsManager:
         group_config = {
             "description": description or f"{groupname} Group",
             "members": added_members,
-            "created": datetime.now(datetime.timezone.utc).isoformat(),
+            "created": datetime.utcnow().isoformat(),
         }
         self._state.set_item("groups", groupname, group_config)
         return f"Group '{groupname}' created successfully."
@@ -223,7 +223,7 @@ class SmbZfsManager:
             "valid_users": valid_users or f"@{group}",
             "read_only": read_only,
             "browseable": browseable,
-            "created": datetime.now(datetime.timezone.utc).isoformat(),
+            "created": datetime.utcnow().isoformat(),
         }
         self._state.set_item("shares", name, state_data)
         return f"Share '{name}' created successfully."
