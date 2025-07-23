@@ -5,7 +5,7 @@ requires-python = ">=3.10"
 authors = [{ name = "Nils Stein", email = "github.nstein@mailbox.org" }]
 description = "A tool to manage Samba on a ZFS-backed system."
 readme = "README.md"
-license-files = ["LICENSE"]
+license = { file = "LICENSE" }
 classifiers = [
     'Development Status :: 4 - Beta',
     'Programming Language :: Python :: 3',
