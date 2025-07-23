@@ -1,7 +1,7 @@
 from . import SmbZfsError
 
 
-class ZFS:
+class Zfs:
     def __init__(self, system_helper):
         self._system = system_helper
 

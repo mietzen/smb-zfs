@@ -1,25 +1,25 @@
-import os
-import re
-import pwd
 import grp
+import os
+import pwd
+import re
 from datetime import datetime
 
 from . import (
     ConfigGenerator,
+    SmbZfsError,
     StateManager,
     System,
-    ZFS,
-    SmbZfsError,
-    STATE_FILE,
-    SMB_CONF,
+    Zfs,
     AVAHI_SMB_SERVICE,
+    SMB_CONF,
+    STATE_FILE,
 )
 
 
 class SmbZfsManager:
     def __init__(self, state_path=STATE_FILE):
         self._system = System()
-        self._zfs = ZFS(self._system)
+        self._zfs = Zfs(self._system)
         self._state = StateManager(state_path)
         self._config = ConfigGenerator()
 

@@ -1,6 +1,6 @@
-import subprocess
-import pwd
 import grp
+import pwd
+import subprocess
 
 from . import SmbZfsError, SMB_CONF
 

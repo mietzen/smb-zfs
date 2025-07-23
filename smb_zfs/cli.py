@@ -2,9 +2,9 @@
 
 import argparse
 import getpass
-import sys
-import socket
 import os
+import socket
+import sys
 
 from importlib import metadata
 from . import SmbZfsManager, SmbZfsError
@@ -278,7 +278,7 @@ def main():
         dest="command", required=True, help="Available commands"
     )
 
-    # --- Install ---
+    
     p_install = subparsers.add_parser(
         "install", help="Initial setup of Samba, ZFS, and Avahi."
     )
@@ -301,7 +301,7 @@ def main():
     )
     p_install.set_defaults(func=cmd_install)
 
-    # --- Create ---
+    
     p_create = subparsers.add_parser(
         "create", help="Create a new user, share, or group."
     )
@@ -388,7 +388,7 @@ def main():
     )
     p_create_group.set_defaults(func=cmd_create_group)
 
-    # --- Delete ---
+    
     p_delete = subparsers.add_parser("delete", help="Remove a user, share, or group.")
     delete_sub = p_delete.add_subparsers(dest="delete_type", required=True)
 
@@ -439,19 +439,19 @@ def main():
     )
     p_delete_group.set_defaults(func=cmd_delete_group)
 
-    # --- List ---
+    
     p_list = subparsers.add_parser("list", help="List all items of a specific type.")
     p_list.add_argument(
         "type", choices=["users", "shares", "groups"], help="The type of item to list."
     )
     p_list.set_defaults(func=cmd_list)
 
-    # --- Passwd ---
+    
     p_passwd = subparsers.add_parser("passwd", help="Change a user's password.")
     p_passwd.add_argument("user", help="The user whose password to change.")
     p_passwd.set_defaults(func=cmd_passwd)
 
-    # --- Uninstall ---
+    
     p_uninstall = subparsers.add_parser(
         "uninstall", help="Remove all configurations, data, and packages."
     )

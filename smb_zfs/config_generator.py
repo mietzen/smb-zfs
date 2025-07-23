@@ -1,6 +1,6 @@
 import os
-import shutil
 import re
+import shutil
 from datetime import datetime
 
 from . import SMB_CONF, AVAHI_SMB_SERVICE

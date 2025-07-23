@@ -2,14 +2,12 @@
 
 import argparse
 import getpass
-import sys
 import socket
+import sys
 from importlib import metadata
 from . import SmbZfsManager, SmbZfsError
 
 CONFIRM_PHRASE = "I KNOW WHAT I AM DOING"
-
-# --- Helper functions for user input ---
 
 
 def prompt(message, default=None):
@@ -59,7 +57,7 @@ def confirm_destructive_action(message):
     return False
 
 
-# --- Wizard functions for each command ---
+
 
 
 def wizard_install(manager, args=None):
@@ -259,7 +257,7 @@ def main():
     # If no command is given, print help and exit.
     subparsers.required = True
 
-    # --- Define parsers for each command ---
+    
     p_install = subparsers.add_parser("install", help="Start the initial setup wizard.")
     p_install.set_defaults(func=wizard_install)
 
