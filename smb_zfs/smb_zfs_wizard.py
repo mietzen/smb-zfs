@@ -9,17 +9,21 @@ from . import SmbZfsManager, SmbZfsError, CONFIRM_PHRASE, NAME
 
 
 def prompt(message, default=None):
-    """General purpose prompt for a string value."""
-    if default:
-        return input(f"{message} [{default}]: ") or default
-    return input(f"{message}: ")
+    """General purpose prompt that handles KeyboardInterrupt."""
+    try:
+        if default:
+            return input(f"{message} [{default}]: ") or default
+        return input(f"{message}: ")
+    except KeyboardInterrupt:
+        print("\n\nOperation cancelled by user.")
+        sys.exit(130) # Exit code 130 for user interrupt
 
 
 def prompt_yes_no(message, default="n"):
     """Prompts for a yes/no answer."""
     options = "[y/N]" if default.lower() == "n" else "[Y/n]"
     while True:
-        response = input(f"{message} {options} ").lower() or default
+        response = prompt(f"{message} {options} ", default=default).lower()
         if response in ["y", "yes"]:
             return True
         if response in ["n", "no"]:
@@ -47,7 +51,7 @@ def confirm_destructive_action(message):
         f"To proceed, you must type the following phrase exactly: {CONFIRM_PHRASE}",
         file=sys.stderr,
     )
-    response = input("> ")
+    response = prompt("> ")
     if response == CONFIRM_PHRASE:
         print("Confirmation received.")
         return True
@@ -55,12 +59,38 @@ def confirm_destructive_action(message):
     return False
 
 
+def _list_and_prompt(manager, item_type, prompt_message, allow_empty=False):
+    """Helper to list items and then prompt for a choice."""
+    try:
+        items = list(manager.list_items(item_type).keys())
+        if not items:
+            if not allow_empty:
+                print(f"No managed {item_type} found.")
+                return None
+        else:
+            print(f"Available {item_type}:", ", ".join(items))
+    except SmbZfsError as e:
+        if "not set up" in str(e):
+             print(f"Note: Cannot list {item_type} as system is not yet set up.")
+        else:
+            raise e
+    
+    return prompt(prompt_message)
+
+
 def wizard_setup(manager, args=None):
     print("\n--- Initial System Setup Wizard ---")
     try:
+        available_pools = manager.list_pools()
+        if available_pools:
+            print("Available ZFS pools:", ", ".join(available_pools))
+        else:
+            print("Warning: No ZFS pools found.")
+        
         pool = prompt("Enter the name of the ZFS pool to use")
         if not pool:
             raise ValueError("Pool name cannot be empty.")
+        
         server_name = prompt(
             "Enter the server's NetBIOS name", default=socket.gethostname()
         )
@@ -92,7 +122,7 @@ def wizard_create_user(manager, args=None):
         password = prompt_for_password(username)
         allow_shell = prompt_yes_no("Allow shell access (/bin/bash)?", default="n")
 
-        groups_str = prompt("Enter comma-separated groups to add user to (optional)")
+        groups_str = _list_and_prompt(manager, "groups", "Enter comma-separated groups to add user to (optional)", allow_empty=True)
         groups = [g.strip() for g in groups_str.split(",")] if groups_str else []
 
         result = manager.create_user(username, password, allow_shell, groups)
@@ -114,8 +144,9 @@ def wizard_create_share(manager, args=None):
             raise ValueError("Dataset path cannot be empty.")
 
         comment = prompt("Enter a comment for the share (optional)")
-        owner = prompt("Enter the owner for the share's files", default="root")
-        group = prompt("Enter the group for the share's files", default="smb_users")
+        owner = _list_and_prompt(manager, "users", "Enter the owner for the share's files (default: root)", allow_empty=True) or 'root'
+        group = _list_and_prompt(manager, "groups", "Enter the group for the share's files (default: smb_users)", allow_empty=True) or 'smb_users'
+        
         perms = prompt(
             "Enter file system permissions for the share root", default="0775"
         )
@@ -150,7 +181,7 @@ def wizard_create_group(manager, args=None):
             raise ValueError("Group name cannot be empty.")
 
         description = prompt("Enter a description for the group (optional)")
-        users_str = prompt("Enter comma-separated initial members (optional)")
+        users_str = _list_and_prompt(manager, "users", "Enter comma-separated initial members (optional)", allow_empty=True)
         users = [u.strip() for u in users_str.split(",")] if users_str else []
 
         result = manager.create_group(group_name, description, users)
@@ -162,14 +193,13 @@ def wizard_create_group(manager, args=None):
 def wizard_modify_group(manager, args=None):
     print("\n--- Modify Group Wizard ---")
     try:
-        group_name = prompt("Enter the name of the group to modify")
-        if not group_name:
-            return
-        
-        add_users_str = prompt("Enter comma-separated users to ADD (optional)")
+        group_name = _list_and_prompt(manager, "groups", "Enter the name of the group to modify")
+        if not group_name: return
+
+        add_users_str = _list_and_prompt(manager, "users", "Enter comma-separated users to ADD (optional)", allow_empty=True)
         add_users = [u.strip() for u in add_users_str.split(',')] if add_users_str else None
         
-        remove_users_str = prompt("Enter comma-separated users to REMOVE (optional)")
+        remove_users_str = _list_and_prompt(manager, "users", "Enter comma-separated users to REMOVE (optional)", allow_empty=True)
         remove_users = [u.strip() for u in remove_users_str.split(',')] if remove_users_str else None
 
         if not add_users and not remove_users:
@@ -185,9 +215,8 @@ def wizard_modify_group(manager, args=None):
 def wizard_modify_share(manager, args=None):
     print("\n--- Modify Share Wizard ---")
     try:
-        share_name = prompt("Enter the name of the share to modify")
-        if not share_name:
-            return
+        share_name = _list_and_prompt(manager, "shares", "Enter the name of the share to modify")
+        if not share_name: return
 
         print("Enter new values or press Enter to keep the current value.")
         share_info = manager.list_items("shares").get(share_name, {})
@@ -196,8 +225,8 @@ def wizard_modify_share(manager, args=None):
 
         kwargs = {}
         kwargs['comment'] = prompt("Comment", default=share_info.get('comment'))
-        kwargs['owner'] = prompt("Owner", default=share_info.get('owner'))
-        kwargs['group'] = prompt("Group", default=share_info.get('group'))
+        kwargs['owner'] = _list_and_prompt(manager, "users", f"Owner [{share_info.get('owner')}]", allow_empty=True) or share_info.get('owner')
+        kwargs['group'] = _list_and_prompt(manager, "groups", f"Group [{share_info.get('group')}]", allow_empty=True) or share_info.get('group')
         kwargs['permissions'] = prompt("Permissions", default=share_info.get('permissions'))
         kwargs['valid_users'] = prompt("Valid Users", default=share_info.get('valid_users'))
         kwargs['read_only'] = prompt_yes_no("Read-only?", 'y' if share_info.get('read_only') else 'n')
@@ -228,9 +257,8 @@ def wizard_modify_setup(manager, args=None):
 def wizard_delete_user(manager, args=None):
     print("\n--- Delete User Wizard ---")
     try:
-        username = prompt("Enter the username to delete")
-        if not username:
-            return
+        username = _list_and_prompt(manager, "users", "Enter the username to delete")
+        if not username: return
 
         delete_data = prompt_yes_no(
             f"Delete user '{username}'s home directory and all its data?", default="n"
@@ -251,9 +279,8 @@ def wizard_delete_user(manager, args=None):
 def wizard_delete_share(manager, args=None):
     print("\n--- Delete Share Wizard ---")
     try:
-        share_name = prompt("Enter the name of the share to delete")
-        if not share_name:
-            return
+        share_name = _list_and_prompt(manager, "shares", "Enter the name of the share to delete")
+        if not share_name: return
 
         delete_data = prompt_yes_no(
             f"Delete the ZFS dataset for share '{share_name}' and all its data?",
@@ -275,9 +302,8 @@ def wizard_delete_share(manager, args=None):
 def wizard_delete_group(manager, args=None):
     print("\n--- Delete Group Wizard ---")
     try:
-        group_name = prompt("Enter the name of the group to delete")
-        if not group_name:
-            return
+        group_name = _list_and_prompt(manager, "groups", "Enter the name of the group to delete")
+        if not group_name: return
 
         result = manager.delete_group(group_name)
         print(f"\nSuccess: {result}")
@@ -359,10 +385,15 @@ def main():
 
     try:
         manager = SmbZfsManager()
+        # Add a list_pools method to the manager for the wizard to use
+        manager.list_pools = lambda: manager._zfs.list_pools()
         args.func(manager, args)
     except SmbZfsError as e:
         print(f"Initialization Error: {e}", file=sys.stderr)
         sys.exit(1)
+    except KeyboardInterrupt:
+        print("\n\nOperation cancelled by user.")
+        sys.exit(130)
     except Exception as e:
         print(f"An unexpected error occurred: {e}", file=sys.stderr)
         sys.exit(1)
