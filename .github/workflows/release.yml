@@ -39,7 +39,9 @@ jobs:
     - name: Install build dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y python3-stdeb build-essential devscripts git dh-python python3-setuptools
+        sudo apt-get install -y build-essential devscripts git dh-python
+        pip install --upgrade pip
+        pip install stdeb setuptools
 
     - name: Generate Debian source control files
       run: python3 setup.py --command-packages=stdeb.command sdist_dsc
