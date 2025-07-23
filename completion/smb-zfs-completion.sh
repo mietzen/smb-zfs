@@ -28,7 +28,7 @@ _smb_zfs_completion() {
     # Define all possible commands, sub-commands, and global options.
     local commands="setup create modify list delete passwd remove"
     local create_opts="user share group"
-    local modify_opts="user share group setup"
+    local modify_opts="group share setup"
     local delete_opts="user share group"
     local list_opts="users shares groups"
     local global_opts="-h --help -v --version"
@@ -75,7 +75,7 @@ _smb_zfs_completion() {
             fi
             local sub_command="${words[2]}"
             case "${sub_command}" in
-                group|share|user)
+                group|share)
                     # Dynamically complete the item name (e.g., the group to modify)
                     if [ "$cword" -eq 3 ]; then
                         COMPREPLY=( $(compgen -W "$(_get_managed_items ${sub_command}s)" -- "${cur}") )

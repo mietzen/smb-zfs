@@ -159,6 +159,71 @@ def wizard_create_group(manager, args=None):
     except (SmbZfsError, ValueError) as e:
         print(f"\nError: {e}", file=sys.stderr)
 
+def wizard_modify_group(manager, args=None):
+    print("\n--- Modify Group Wizard ---")
+    try:
+        group_name = prompt("Enter the name of the group to modify")
+        if not group_name:
+            return
+        
+        add_users_str = prompt("Enter comma-separated users to ADD (optional)")
+        add_users = [u.strip() for u in add_users_str.split(',')] if add_users_str else None
+        
+        remove_users_str = prompt("Enter comma-separated users to REMOVE (optional)")
+        remove_users = [u.strip() for u in remove_users_str.split(',')] if remove_users_str else None
+
+        if not add_users and not remove_users:
+            print("No changes specified. Exiting.")
+            return
+
+        result = manager.modify_group(group_name, add_users, remove_users)
+        print(f"\nSuccess: {result}")
+
+    except (SmbZfsError, ValueError) as e:
+        print(f"\nError: {e}", file=sys.stderr)
+
+def wizard_modify_share(manager, args=None):
+    print("\n--- Modify Share Wizard ---")
+    try:
+        share_name = prompt("Enter the name of the share to modify")
+        if not share_name:
+            return
+
+        print("Enter new values or press Enter to keep the current value.")
+        share_info = manager.list_items("shares").get(share_name, {})
+        if not share_info:
+            raise SmbZfsError(f"Share '{share_name}' not found.")
+
+        kwargs = {}
+        kwargs['comment'] = prompt("Comment", default=share_info.get('comment'))
+        kwargs['owner'] = prompt("Owner", default=share_info.get('owner'))
+        kwargs['group'] = prompt("Group", default=share_info.get('group'))
+        kwargs['permissions'] = prompt("Permissions", default=share_info.get('permissions'))
+        kwargs['valid_users'] = prompt("Valid Users", default=share_info.get('valid_users'))
+        kwargs['read_only'] = prompt_yes_no("Read-only?", 'y' if share_info.get('read_only') else 'n')
+        kwargs['browseable'] = prompt_yes_no("Browseable?", 'y' if share_info.get('browseable') else 'n')
+
+        result = manager.modify_share(share_name, **kwargs)
+        print(f"\nSuccess: {result}")
+
+    except (SmbZfsError, ValueError) as e:
+        print(f"\nError: {e}", file=sys.stderr)
+
+def wizard_modify_setup(manager, args=None):
+    print("\n--- Modify Global Setup Wizard ---")
+    try:
+        print("Enter new values or press Enter to keep the current value.")
+        kwargs = {}
+        kwargs['server_name'] = prompt("Server Name", default=manager._state.get('server_name'))
+        kwargs['workgroup'] = prompt("Workgroup", default=manager._state.get('workgroup'))
+        kwargs['macos_optimized'] = prompt_yes_no("macOS Optimized?", 'y' if manager._state.get('macos_optimized') else 'n')
+
+        result = manager.modify_setup(**kwargs)
+        print(f"\nSuccess: {result}")
+
+    except (SmbZfsError, ValueError) as e:
+        print(f"\nError: {e}", file=sys.stderr)
+
 
 def wizard_delete_user(manager, args=None):
     print("\n--- Delete User Wizard ---")
@@ -262,6 +327,15 @@ def main():
     p_create_share.set_defaults(func=wizard_create_share)
     p_create_group = create_sub.add_parser("group", help="Start the new group wizard.")
     p_create_group.set_defaults(func=wizard_create_group)
+
+    p_modify = subparsers.add_parser("modify", help="Start a modification wizard.")
+    modify_sub = p_modify.add_subparsers(dest="modify_type", required=True)
+    p_modify_group = modify_sub.add_parser("group", help="Start the modify group wizard.")
+    p_modify_group.set_defaults(func=wizard_modify_group)
+    p_modify_share = modify_sub.add_parser("share", help="Start the modify share wizard.")
+    p_modify_share.set_defaults(func=wizard_modify_share)
+    p_modify_setup = modify_sub.add_parser("setup", help="Start the modify global setup wizard.")
+    p_modify_setup.set_defaults(func=wizard_modify_setup)
 
     p_delete = subparsers.add_parser("delete", help="Start a deletion wizard.")
     delete_sub = p_delete.add_subparsers(dest="delete_type", required=True)

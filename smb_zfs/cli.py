@@ -149,6 +149,83 @@ def cmd_create_group(manager, args):
 
 
 @handle_exception
+def cmd_modify_group(manager, args):
+    """Handler for the 'modify group' command."""
+    add_users = args.add_users.split(',') if args.add_users else []
+    remove_users = args.remove_users.split(',') if args.remove_users else []
+
+    if args.dry_run:
+        print("--- Dry Run ---")
+        print(f"Would modify group '{args.group}':")
+        if add_users:
+            print(f"  - Add users: {', '.join(add_users)}")
+        if remove_users:
+            print(f"  - Remove users: {', '.join(remove_users)}")
+        return
+    
+    check_root()
+    result = manager.modify_group(args.group, add_users, remove_users)
+    print(result)
+
+
+@handle_exception
+def cmd_modify_share(manager, args):
+    """Handler for the 'modify share' command."""
+    kwargs = {
+        'comment': args.comment,
+        'valid_users': args.valid_users,
+        'read_only': args.readonly,
+        'browseable': not args.no_browse if args.no_browse is not None else None,
+        'permissions': args.perms,
+        'owner': args.owner,
+        'group': args.group,
+    }
+    # Filter out unset arguments
+    kwargs = {k: v for k, v in kwargs.items() if v is not None}
+
+    if not kwargs:
+        print("No modifications specified. Use --help to see options.", file=sys.stderr)
+        return
+
+    if args.dry_run:
+        print("--- Dry Run ---")
+        print(f"Would modify share '{args.share}' with the following changes:")
+        for key, value in kwargs.items():
+            print(f"  - Set {key} to: {value}")
+        return
+
+    check_root()
+    result = manager.modify_share(args.share, **kwargs)
+    print(result)
+
+
+@handle_exception
+def cmd_modify_setup(manager, args):
+    """Handler for the 'modify setup' command."""
+    kwargs = {
+        'server_name': args.server_name,
+        'workgroup': args.workgroup,
+        'macos_optimized': args.macos,
+    }
+    kwargs = {k: v for k, v in kwargs.items() if v is not None}
+
+    if not kwargs:
+        print("No modifications specified. Use --help to see options.", file=sys.stderr)
+        return
+
+    if args.dry_run:
+        print("--- Dry Run ---")
+        print("Would modify global setup with the following changes:")
+        for key, value in kwargs.items():
+            print(f"  - Set {key} to: {value}")
+        return
+
+    check_root()
+    result = manager.modify_setup(**kwargs)
+    print(result)
+
+
+@handle_exception
 def cmd_delete_user(manager, args):
     """Handler for the 'delete user' command."""
     if args.dry_run:
@@ -385,6 +462,36 @@ def main():
         help="Don't change anything just summarize the changes",
     )
     p_create_group.set_defaults(func=cmd_create_group)
+
+    # --- Modify Command ---
+    p_modify = subparsers.add_parser("modify", help="Modify an existing user, share, or group.")
+    modify_sub = p_modify.add_subparsers(dest="modify_type", required=True)
+
+    p_modify_group = modify_sub.add_parser("group", help="Modify a group's membership.")
+    p_modify_group.add_argument("group", help="The name of the group to modify.")
+    p_modify_group.add_argument("--add-users", help="Comma-separated list of users to add.")
+    p_modify_group.add_argument("--remove-users", help="Comma-separated list of users to remove.")
+    p_modify_group.add_argument('--dry-run', action='store_true', help="Don't change anything just summarize the changes")
+    p_modify_group.set_defaults(func=cmd_modify_group)
+
+    p_modify_share = modify_sub.add_parser("share", help="Modify a share's properties.")
+    p_modify_share.add_argument("share", help="The name of the share to modify.")
+    p_modify_share.add_argument("--comment", help="New description for the share.")
+    p_modify_share.add_argument("--owner", help="New user who will own the files.")
+    p_modify_share.add_argument("--group", help="New group that will own the files.")
+    p_modify_share.add_argument("--perms", help="New file system permissions (e.g., 770).")
+    p_modify_share.add_argument("--valid-users", help="New list of allowed users/groups.")
+    p_modify_share.add_argument("--readonly", action=argparse.BooleanOptionalAction, help="Set the share as read-only.")
+    p_modify_share.add_argument("--no-browse", action=argparse.BooleanOptionalAction, help="Hide the share from network browsing.")
+    p_modify_share.add_argument('--dry-run', action='store_true', help="Don't change anything just summarize the changes")
+    p_modify_share.set_defaults(func=cmd_modify_share)
+
+    p_modify_setup = modify_sub.add_parser("setup", help="Modify global server configuration.")
+    p_modify_setup.add_argument("--server-name", help="New server NetBIOS name.")
+    p_modify_setup.add_argument("--workgroup", help="New workgroup name.")
+    p_modify_setup.add_argument("--macos", action=argparse.BooleanOptionalAction, help="Enable or disable macOS optimizations.")
+    p_modify_setup.add_argument('--dry-run', action='store_true', help="Don't change anything just summarize the changes")
+    p_modify_setup.set_defaults(func=cmd_modify_setup)
 
     
     p_delete = subparsers.add_parser("delete", help="Remove a user, share, or group.")

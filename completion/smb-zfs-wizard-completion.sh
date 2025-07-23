@@ -14,8 +14,9 @@ _smb_zfs_wizard_completion() {
     _get_comp_words_by_ref -n : cur prev words cword
 
     # Define all possible commands and sub-commands.
-    local commands="setup create delete remove"
+    local commands="setup create modify delete remove"
     local create_opts="user share group"
+    local modify_opts="group share setup"
     local delete_opts="user share group"
     local global_opts="-h --help -v --version"
 
@@ -31,6 +32,12 @@ _smb_zfs_wizard_completion() {
             # Complete the sub-command (user, share, group)
             if [ "$cword" -eq 2 ]; then
                 COMPREPLY=( $(compgen -W "${create_opts}" -- "${cur}") )
+            fi
+            ;;
+        modify)
+            # Complete the sub-command (group, share, setup)
+            if [ "$cword" -eq 2 ]; then
+                COMPREPLY=( $(compgen -W "${modify_opts}" -- "${cur}") )
             fi
             ;;
         delete)

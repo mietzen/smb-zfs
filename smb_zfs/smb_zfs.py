@@ -243,6 +243,102 @@ class SmbZfsManager:
         self._state.delete_item("shares", name)
         return f"Share '{name}' deleted successfully."
 
+    def modify_group(self, groupname, add_users=None, remove_users=None):
+        self._check_initialized()
+        group_info = self._state.get_item("groups", groupname)
+        if not group_info:
+            raise SmbZfsError(f"Group '{groupname}' is not managed by this tool.")
+
+        current_members = set(group_info.get("members", []))
+        if add_users:
+            for user in add_users:
+                if not self._state.get_item("users", user):
+                    print(f"Warning: User '{user}' not managed by this tool. Skipping.")
+                    continue
+                self._system.add_user_to_group(user, groupname)
+                current_members.add(user)
+
+        if remove_users:
+            for user in remove_users:
+                self._system.remove_user_from_group(user, groupname)
+                current_members.discard(user)
+
+        group_info["members"] = sorted(list(current_members))
+        self._state.set_item("groups", groupname, group_info)
+        return f"Group '{groupname}' modified successfully."
+
+    def modify_share(self, share_name, **kwargs):
+        self._check_initialized()
+        share_info = self._state.get_item("shares", share_name)
+        if not share_info:
+            raise SmbZfsError(f"Share '{share_name}' is not managed by this tool.")
+
+        # Update share_info with provided kwargs, filtering out None values
+        for key, value in kwargs.items():
+            if value is not None:
+                share_info[key] = value
+        
+        # Apply filesystem changes if needed
+        if any(k in kwargs for k in ['owner', 'group', 'permissions']):
+            mount_point = share_info['path']
+            uid = pwd.getpwnam(share_info['owner']).pw_uid
+            gid = grp.getgrnam(share_info['group']).gr_gid
+            os.chown(mount_point, uid, gid)
+            os.chmod(mount_point, int(share_info['permissions'], 8))
+
+        # Re-write the share configuration in smb.conf
+        self._config.remove_share_from_conf(share_name)
+        conf_data = {
+            "name": share_name,
+            "comment": share_info['comment'],
+            "path": share_info['path'],
+            "browseable": share_info['browseable'],
+            "read_only": share_info['read_only'],
+            "valid_users": share_info['valid_users'],
+            "owner": share_info['owner'],
+            "group": share_info['group'],
+        }
+        self._config.add_share_to_conf(conf_data)
+        self._system.test_samba_config()
+        self._system.reload_samba()
+
+        self._state.set_item("shares", share_name, share_info)
+        return f"Share '{share_name}' modified successfully."
+
+    def modify_setup(self, **kwargs):
+        self._check_initialized()
+        
+        # Update state with any new values
+        for key, value in kwargs.items():
+            if value is not None:
+                self._state.set(key, value)
+        
+        # Regenerate smb.conf with new global settings
+        pool = self._state.get("zfs_pool")
+        server_name = self._state.get("server_name")
+        workgroup = self._state.get("workgroup")
+        macos_optimized = self._state.get("macos_optimized")
+        self._config.create_smb_conf(pool, server_name, workgroup, macos_optimized)
+
+        # Re-add all existing shares to the new config
+        all_shares = self.list_items("shares")
+        for share_name, share_info in all_shares.items():
+            conf_data = {
+                "name": share_name,
+                "comment": share_info['comment'],
+                "path": share_info['path'],
+                "browseable": share_info['browseable'],
+                "read_only": share_info['read_only'],
+                "valid_users": share_info['valid_users'],
+                "owner": share_info['owner'],
+                "group": share_info['group'],
+            }
+            self._config.add_share_to_conf(conf_data)
+
+        self._system.test_samba_config()
+        self._system.reload_samba()
+        return "Global setup modified successfully."
+
     def change_password(self, username, new_password):
         self._check_initialized()
         user_info = self._state.get_item("users", username)
@@ -268,8 +364,7 @@ class SmbZfsManager:
         pool = self._state.get("zfs_pool")
         users = self.list_items("users")
         groups = self.list_items("groups")
-        shares = self.list_items("shares")
-
+        
         if delete_users_and_groups:
             for username in users:
                 if self._system.samba_user_exists(username):
@@ -285,7 +380,8 @@ class SmbZfsManager:
         if delete_data and pool:
             for user_info in users.values():
                 self._zfs.destroy_dataset(user_info["home_dataset"])
-            for share_info in shares.values():
+            all_shares = self.list_items("shares")
+            for share_info in all_shares.values():
                 if "dataset" in share_info:
                     self._zfs.destroy_dataset(share_info["dataset"])
             self._zfs.destroy_dataset(f"{pool}/homes")
