@@ -248,10 +248,34 @@ def wizard_modify_setup(manager, args=None):
     print("\n--- Modify Global Setup Wizard ---")
     try:
         print("Enter new values or press Enter to keep the current value.")
+        
+        current_state = {
+            'server_name': manager._state.get('server_name'),
+            'workgroup': manager._state.get('workgroup'),
+            'macos_optimized': manager._state.get('macos_optimized'),
+            'default_home_quota': manager._state.get('default_home_quota'),
+        }
+
+        new_server_name = prompt("Server Name", default=current_state['server_name'])
+        new_workgroup = prompt("Workgroup", default=current_state['workgroup'])
+        new_macos = prompt_yes_no("macOS Optimized?", 'y' if current_state['macos_optimized'] else 'n')
+        new_quota_str = prompt("Default Home Quota (e.g., 50G or 'none')", default=current_state['default_home_quota'] or 'none')
+
+        new_quota = new_quota_str if new_quota_str and new_quota_str.lower() != 'none' else None
+
         kwargs = {}
-        kwargs['server_name'] = prompt("Server Name", default=manager._state.get('server_name'))
-        kwargs['workgroup'] = prompt("Workgroup", default=manager._state.get('workgroup'))
-        kwargs['macos_optimized'] = prompt_yes_no("macOS Optimized?", 'y' if manager._state.get('macos_optimized') else 'n')
+        if new_server_name != current_state['server_name']:
+            kwargs['server_name'] = new_server_name
+        if new_workgroup != current_state['workgroup']:
+            kwargs['workgroup'] = new_workgroup
+        if new_macos != current_state['macos_optimized']:
+            kwargs['macos_optimized'] = new_macos
+        if new_quota != current_state['default_home_quota']:
+            kwargs['default_home_quota'] = new_quota
+
+        if not kwargs:
+            print("No changes were made.")
+            return
 
         result = manager.modify_setup(**kwargs)
         print(f"\nSuccess: {result}")

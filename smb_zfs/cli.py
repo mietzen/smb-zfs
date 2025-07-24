@@ -210,12 +210,18 @@ def cmd_modify_share(manager, args):
 @handle_exception
 def cmd_modify_setup(manager, args):
     """Handler for the 'modify setup' command."""
-    kwargs = {
-        'server_name': args.server_name,
-        'workgroup': args.workgroup,
-        'macos_optimized': args.macos,
-    }
-    kwargs = {k: v for k, v in kwargs.items() if v is not None}
+    kwargs = {}
+    if args.server_name is not None:
+        kwargs['server_name'] = args.server_name
+    if args.workgroup is not None:
+        kwargs['workgroup'] = args.workgroup
+    if args.macos is not None:
+        kwargs['macos_optimized'] = args.macos
+    if args.default_home_quota is not None:
+        if args.default_home_quota.lower() == 'none':
+            kwargs['default_home_quota'] = None
+        else:
+            kwargs['default_home_quota'] = args.default_home_quota
 
     if not kwargs:
         print("No modifications specified. Use --help to see options.", file=sys.stderr)
@@ -450,7 +456,7 @@ def main():
     p_create_share.add_argument(
         "--no-browse",
         action="store_true",
-        help="Hide the share from network browsing (default: browseable).",
+        help="Hide the share from network Browse (default: browseable).",
     )
     p_create_share.add_argument(
         "--quota", help="Set a ZFS quota for the share (e.g., 100G)."
@@ -505,6 +511,7 @@ def main():
     p_modify_setup.add_argument("--server-name", help="New server NetBIOS name.")
     p_modify_setup.add_argument("--workgroup", help="New workgroup name.")
     p_modify_setup.add_argument("--macos", action=argparse.BooleanOptionalAction, help="Enable or disable macOS optimizations.")
+    p_modify_setup.add_argument("--default-home-quota", help="New default quota for user homes (e.g., 50G). Use 'none' to remove.")
     p_modify_setup.add_argument('--dry-run', action='store_true', help="Don't change anything just summarize the changes")
     p_modify_setup.set_defaults(func=cmd_modify_setup)
 

@@ -321,35 +321,37 @@ class SmbZfsManager:
     def modify_setup(self, **kwargs):
         self._check_initialized()
 
-        # Update state with any new values
+        # Update state with any new values.
+        # kwargs contains only the arguments that were actually passed.
         for key, value in kwargs.items():
-            if value is not None:
-                self._state.set(key, value)
+            self._state.set(key, value)
 
-        # Regenerate smb.conf with new global settings
-        pool = self._state.get("zfs_pool")
-        server_name = self._state.get("server_name")
-        workgroup = self._state.get("workgroup")
-        macos_optimized = self._state.get("macos_optimized")
-        self._config.create_smb_conf(pool, server_name, workgroup, macos_optimized)
+        # Regenerate smb.conf with new global settings if needed
+        if any(k in kwargs for k in ['server_name', 'workgroup', 'macos_optimized']):
+            pool = self._state.get("zfs_pool")
+            server_name = self._state.get("server_name")
+            workgroup = self._state.get("workgroup")
+            macos_optimized = self._state.get("macos_optimized")
+            self._config.create_smb_conf(pool, server_name, workgroup, macos_optimized)
 
-        # Re-add all existing shares to the new config
-        all_shares = self.list_items("shares")
-        for share_name, share_info in all_shares.items():
-            conf_data = {
-                "name": share_name,
-                "comment": share_info['comment'],
-                "path": share_info['path'],
-                "browseable": share_info['browseable'],
-                "read_only": share_info['read_only'],
-                "valid_users": share_info['valid_users'],
-                "owner": share_info['owner'],
-                "group": share_info['group'],
-            }
-            self._config.add_share_to_conf(conf_data)
+            # Re-add all existing shares to the new config
+            all_shares = self.list_items("shares")
+            for share_name, share_info in all_shares.items():
+                conf_data = {
+                    "name": share_name,
+                    "comment": share_info['comment'],
+                    "path": share_info['path'],
+                    "browseable": share_info['browseable'],
+                    "read_only": share_info['read_only'],
+                    "valid_users": share_info['valid_users'],
+                    "owner": share_info['owner'],
+                    "group": share_info['group'],
+                }
+                self._config.add_share_to_conf(conf_data)
 
-        self._system.test_samba_config()
-        self._system.reload_samba()
+            self._system.test_samba_config()
+            self._system.reload_samba()
+            
         return "Global setup modified successfully."
 
     def change_password(self, username, new_password):
