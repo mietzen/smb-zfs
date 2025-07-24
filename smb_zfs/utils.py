@@ -1,6 +1,8 @@
 import re
 import getpass
 
+from .const import CONFIRM_PHRASE
+
 def password_check(password):
     """
     Verify the strength of 'password'
@@ -68,3 +70,15 @@ def prompt_for_password(username):
         if password == password_confirm:
             return password
         print("Passwords do not match. Please try again.", file=sys.stderr)
+
+def confirm_destructive_action(prompt, yes_flag):
+    """Ask for confirmation for a destructive action."""
+    if yes_flag:
+        return True
+    print(f"WARNING: {prompt}", file=sys.stderr)
+    print(
+        f"To proceed, type the following phrase exactly: {CONFIRM_PHRASE}",
+        file=sys.stderr,
+    )
+    response = input("> ")
+    return response == CONFIRM_PHRASE

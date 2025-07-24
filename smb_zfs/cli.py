@@ -9,8 +9,9 @@ from importlib import metadata
 
 from .smb_zfs import SmbZfsManager
 from .errors import SmbZfsError
-from .const import CONFIRM_PHRASE, NAME, SMB_CONF, AVAHI_SMB_SERVICE
-from .pw_utils import prompt_for_password
+from .const import NAME, SMB_CONF, AVAHI_SMB_SERVICE
+from .utils import prompt_for_password, confirm_destructive_action
+
 
 def handle_exception(func):
     """Decorator to catch and print SmbZfsError exceptions."""
@@ -23,19 +24,6 @@ def handle_exception(func):
             sys.exit(1)
 
     return wrapper
-
-
-def confirm_destructive_action(prompt, yes_flag):
-    """Ask for confirmation for a destructive action."""
-    if yes_flag:
-        return True
-    print(f"WARNING: {prompt}", file=sys.stderr)
-    print(
-        f"To proceed, type the following phrase exactly: {CONFIRM_PHRASE}",
-        file=sys.stderr,
-    )
-    response = input("> ")
-    return response == CONFIRM_PHRASE
 
 
 def check_root():
@@ -53,7 +41,7 @@ def cmd_setup(manager, args):
     if args.dry_run:
         print("--- Dry Run ---")
         print("Would perform the following actions:")
-        print("  - Check for required binaries: zfs, samba, smbpasswd, avahi-daemon")
+        print("  - Check for required pkgs: zfsutils-linux, samba, avahi-daemon")
         print(f"  - Create ZFS dataset: {args.pool}/homes")
         print("  - Create system group: smb_users")
         print(f"  - Generate {SMB_CONF} with:")
@@ -68,7 +56,8 @@ def cmd_setup(manager, args):
         print(f"  - Initialize state file at {manager._state.path}")
         return
 
-    result = manager.setup(args.pool, server_name, workgroup, args.macos, args.default_home_quota)
+    result = manager.setup(args.pool, server_name, workgroup,
+                           args.macos, args.default_home_quota)
     print(result)
 
 
@@ -86,7 +75,8 @@ def cmd_create_user(manager, args):
             f"  - Create ZFS home dataset: {manager._state.get('zfs_pool')}/homes/{args.user}"
         )
         if manager._state.get('default_home_quota'):
-            print(f"  - Set ZFS quota: {manager._state.get('default_home_quota')}")
+            print(
+                f"  - Set ZFS quota: {manager._state.get('default_home_quota')}")
         print("  - Set permissions on home directory")
         print(f"  - Add Samba user: {args.user}")
         print("  - Add user to group 'smb_users'")
@@ -237,6 +227,7 @@ def cmd_modify_setup(manager, args):
     result = manager.modify_setup(**kwargs)
     print(result)
 
+
 @handle_exception
 def cmd_modify_home(manager, args):
     """Handler for the 'modify home' command."""
@@ -249,6 +240,7 @@ def cmd_modify_home(manager, args):
     check_root()
     result = manager.modify_home(args.user, args.quota)
     print(result)
+
 
 @handle_exception
 def cmd_delete_user(manager, args):
@@ -368,22 +360,22 @@ def cmd_remove(manager, args):
                 print(f"    - {username}")
             print("  - Delete all managed groups:")
             for groupname in groups:
-                 print(f"    - {groupname}")
+                print(f"    - {groupname}")
             print("    - smb_users")
-
 
         if args.delete_data:
             print("  - DESTROY all managed ZFS datasets:")
             for share_info in shares.values():
                 print(f"    - {share_info['dataset']['name']}")
             for user_info in users.values():
-                 print(f"    - {user_info['dataset']['name']}")
+                print(f"    - {user_info['dataset']['name']}")
             pool = manager._state.get("zfs_pool")
             if pool:
                 print(f"    - {pool}/homes")
 
         print("  - Stop and disable smbd, nmbd, avahi-daemon services.")
-        print(f"  - Remove configuration files: {SMB_CONF}, {AVAHI_SMB_SERVICE}")
+        print(
+            f"  - Remove configuration files: {SMB_CONF}, {AVAHI_SMB_SERVICE}")
         print(f"  - Remove state file: {manager._state.path}")
         return
 
@@ -409,7 +401,6 @@ def main():
         dest="command", required=True, help="Available commands"
     )
 
-
     p_setup = subparsers.add_parser(
         "setup", help="Set up and configure Samba, ZFS, and Avahi."
     )
@@ -434,7 +425,6 @@ def main():
         help="Don't change anything just summarize the changes",
     )
     p_setup.set_defaults(func=cmd_setup)
-
 
     p_create = subparsers.add_parser(
         "create", help="Create a new user, share, or group."
@@ -526,44 +516,70 @@ def main():
     p_create_group.set_defaults(func=cmd_create_group)
 
     # --- Modify Command ---
-    p_modify = subparsers.add_parser("modify", help="Modify an existing user, share, or group.")
+    p_modify = subparsers.add_parser(
+        "modify", help="Modify an existing user, share, or group.")
     modify_sub = p_modify.add_subparsers(dest="modify_type", required=True)
 
-    p_modify_group = modify_sub.add_parser("group", help="Modify a group's membership.")
-    p_modify_group.add_argument("group", help="The name of the group to modify.")
-    p_modify_group.add_argument("--add-users", help="Comma-separated list of users to add.")
-    p_modify_group.add_argument("--remove-users", help="Comma-separated list of users to remove.")
-    p_modify_group.add_argument('--dry-run', action='store_true', help="Don't change anything just summarize the changes")
+    p_modify_group = modify_sub.add_parser(
+        "group", help="Modify a group's membership.")
+    p_modify_group.add_argument(
+        "group", help="The name of the group to modify.")
+    p_modify_group.add_argument(
+        "--add-users", help="Comma-separated list of users to add.")
+    p_modify_group.add_argument(
+        "--remove-users", help="Comma-separated list of users to remove.")
+    p_modify_group.add_argument('--dry-run', action='store_true',
+                                help="Don't change anything just summarize the changes")
     p_modify_group.set_defaults(func=cmd_modify_group)
 
-    p_modify_share = modify_sub.add_parser("share", help="Modify a share's properties.")
-    p_modify_share.add_argument("share", help="The name of the share to modify.")
-    p_modify_share.add_argument("--comment", help="New description for the share.")
-    p_modify_share.add_argument("--owner", help="New user who will own the files.")
-    p_modify_share.add_argument("--group", help="New group that will own the files.")
-    p_modify_share.add_argument("--perms", help="New file system permissions (e.g., 770).")
-    p_modify_share.add_argument("--valid-users", help="New list of allowed users/groups.")
-    p_modify_share.add_argument("--readonly", action=argparse.BooleanOptionalAction, help="Set the share as read-only.")
-    p_modify_share.add_argument("--no-browse", action=argparse.BooleanOptionalAction, help="Hide the share from network Browse.")
-    p_modify_share.add_argument("--quota", help="New ZFS quota for the share (e.g., 200G). Use 'none' to remove.")
-    p_modify_share.add_argument('--dry-run', action='store_true', help="Don't change anything just summarize the changes")
+    p_modify_share = modify_sub.add_parser(
+        "share", help="Modify a share's properties.")
+    p_modify_share.add_argument(
+        "share", help="The name of the share to modify.")
+    p_modify_share.add_argument(
+        "--comment", help="New description for the share.")
+    p_modify_share.add_argument(
+        "--owner", help="New user who will own the files.")
+    p_modify_share.add_argument(
+        "--group", help="New group that will own the files.")
+    p_modify_share.add_argument(
+        "--perms", help="New file system permissions (e.g., 770).")
+    p_modify_share.add_argument(
+        "--valid-users", help="New list of allowed users/groups.")
+    p_modify_share.add_argument(
+        "--readonly", action=argparse.BooleanOptionalAction, help="Set the share as read-only.")
+    p_modify_share.add_argument(
+        "--no-browse", action=argparse.BooleanOptionalAction, help="Hide the share from network Browse.")
+    p_modify_share.add_argument(
+        "--quota", help="New ZFS quota for the share (e.g., 200G). Use 'none' to remove.")
+    p_modify_share.add_argument('--dry-run', action='store_true',
+                                help="Don't change anything just summarize the changes")
     p_modify_share.set_defaults(func=cmd_modify_share)
 
-    p_modify_setup = modify_sub.add_parser("setup", help="Modify global server configuration.")
-    p_modify_setup.add_argument("--server-name", help="New server NetBIOS name.")
+    p_modify_setup = modify_sub.add_parser(
+        "setup", help="Modify global server configuration.")
+    p_modify_setup.add_argument(
+        "--server-name", help="New server NetBIOS name.")
     p_modify_setup.add_argument("--workgroup", help="New workgroup name.")
-    p_modify_setup.add_argument("--macos", action=argparse.BooleanOptionalAction, help="Enable or disable macOS optimizations.")
-    p_modify_setup.add_argument("--default-home-quota", help="New default quota for user homes (e.g., 50G). Use 'none' to remove.")
-    p_modify_setup.add_argument('--dry-run', action='store_true', help="Don't change anything just summarize the changes")
+    p_modify_setup.add_argument(
+        "--macos", action=argparse.BooleanOptionalAction, help="Enable or disable macOS optimizations.")
+    p_modify_setup.add_argument(
+        "--default-home-quota", help="New default quota for user homes (e.g., 50G). Use 'none' to remove.")
+    p_modify_setup.add_argument('--dry-run', action='store_true',
+                                help="Don't change anything just summarize the changes")
     p_modify_setup.set_defaults(func=cmd_modify_setup)
 
-    p_modify_home = modify_sub.add_parser("home", help="Modify a user's home quota.")
+    p_modify_home = modify_sub.add_parser(
+        "home", help="Modify a user's home quota.")
     p_modify_home.add_argument("user", help="The user to modify.")
-    p_modify_home.add_argument("--quota", required=True, help="The new quota for the home directory (e.g., 20G). Use 'none' to remove.")
-    p_modify_home.add_argument('--dry-run', action='store_true', help="Don't change anything just summarize the changes")
+    p_modify_home.add_argument(
+        "--quota", required=True, help="The new quota for the home directory (e.g., 20G). Use 'none' to remove.")
+    p_modify_home.add_argument('--dry-run', action='store_true',
+                               help="Don't change anything just summarize the changes")
     p_modify_home.set_defaults(func=cmd_modify_home)
 
-    p_delete = subparsers.add_parser("delete", help="Delete a user, share, or group.")
+    p_delete = subparsers.add_parser(
+        "delete", help="Delete a user, share, or group.")
     delete_sub = p_delete.add_subparsers(dest="delete_type", required=True)
 
     p_delete_user = delete_sub.add_parser("user", help="Delete a user.")
@@ -613,18 +629,17 @@ def main():
     )
     p_delete_group.set_defaults(func=cmd_delete_group)
 
-
-    p_list = subparsers.add_parser("list", help="List all managed users, shares, or groups.")
+    p_list = subparsers.add_parser(
+        "list", help="List all managed users, shares, or groups.")
     p_list.add_argument(
         "type", choices=["users", "shares", "groups"], help="The type of item to list."
     )
     p_list.set_defaults(func=cmd_list)
 
-
-    p_passwd = subparsers.add_parser("passwd", help="Change a user's Samba password.")
+    p_passwd = subparsers.add_parser(
+        "passwd", help="Change a user's Samba password.")
     p_passwd.add_argument("user", help="The user whose password to change.")
     p_passwd.set_defaults(func=cmd_passwd)
-
 
     p_remove = subparsers.add_parser(
         "remove", help="Uninstall smb-zfs and remove all related configurations and data."

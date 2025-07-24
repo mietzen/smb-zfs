@@ -124,6 +124,12 @@ class SmbZfsManager:
                     f"Required package '{pkg}' is not installed. Please install it first."
                 )
 
+        # Validate that the provided ZFS pool exists.
+        available_pools = self._zfs.list_pools()
+        if pool not in available_pools:
+            raise ItemNotFoundError(f"ZFS pool '{pool}' not found. Available pools", ", ".join(available_pools) if available_pools else "None")
+
+
         self._zfs.create_dataset(f"{pool}/homes")
         homes_mountpoint = self._zfs.get_mountpoint(f"{pool}/homes")
         os.chmod(homes_mountpoint, 0o755)
@@ -307,6 +313,12 @@ class SmbZfsManager:
         if self._state.get_item("shares", name):
             raise ItemExistsError("share", name)
 
+        if ".." in dataset_path or dataset_path.startswith('/'):
+            raise InvalidNameError("Dataset path cannot contain '..' or be an absolute path.")
+
+        if not re.match(r"^[0-7]{3,4}$", perms):
+            raise InvalidNameError(f"Permissions '{perms}' are invalid. Must be 3 or 4 octal digits (e.g., 775 or 0775).")
+
         if not self._system.user_exists(owner):
             raise ItemNotFoundError("user", owner)
 
@@ -434,7 +446,6 @@ class SmbZfsManager:
                 new_quota = kwargs['quota'] if kwargs['quota'].lower() != 'none' else None
                 share_info['dataset']['quota'] = new_quota
                 self._zfs.set_quota(share_info["dataset"]["name"], new_quota)
-
             system_changed = False
             if 'owner' in kwargs and kwargs['owner'] is not None:
                 if not self._system.user_exists(kwargs['owner']):
@@ -447,7 +458,10 @@ class SmbZfsManager:
                 share_info['system']['group'] = kwargs['group']
                 system_changed = True
             if 'perms' in kwargs and kwargs['perms'] is not None:
-                share_info['system']['permissions'] = kwargs['perms']
+                perms = kwargs['perms']
+                if not re.match(r"^[0-7]{3,4}$", perms):
+                    raise InvalidNameError(f"Permissions '{perms}' are invalid. Must be 3 or 4 octal digits (e.g., 775 or 0775).")
+                share_info['system']['permissions'] = perms
                 system_changed = True
 
             if system_changed:

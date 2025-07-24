@@ -7,8 +7,9 @@ from importlib import metadata
 
 from .smb_zfs import SmbZfsManager
 from .errors import SmbZfsError
-from .const import CONFIRM_PHRASE, NAME
-from .pw_utils import prompt_for_password
+from .const import NAME
+from .utils import prompt_for_password, confirm_destructive_action
+
 
 def prompt(message, default=None):
     """General purpose prompt that handles KeyboardInterrupt."""
@@ -18,7 +19,7 @@ def prompt(message, default=None):
         return input(f"{message}: ")
     except KeyboardInterrupt:
         print("\n\nOperation cancelled by user.")
-        sys.exit(130) # Exit code 130 for user interrupt
+        sys.exit(130)  # Exit code 130 for user interrupt
 
 
 def prompt_yes_no(message, default="n"):
@@ -33,21 +34,6 @@ def prompt_yes_no(message, default="n"):
         print("Please answer 'yes' or 'no'.")
 
 
-def confirm_destructive_action(message):
-    """Asks for confirmation before performing a destructive action."""
-    print(f"\n!!! WARNING !!!\n{message}", file=sys.stderr)
-    print(
-        f"To proceed, you must type the following phrase exactly: {CONFIRM_PHRASE}",
-        file=sys.stderr,
-    )
-    response = prompt("> ")
-    if response == CONFIRM_PHRASE:
-        print("Confirmation received.")
-        return True
-    print("Confirmation failed. Operation cancelled.", file=sys.stderr)
-    return False
-
-
 def _list_and_prompt(manager, item_type, prompt_message, allow_empty=False):
     """Helper to list items and then prompt for a choice."""
     try:
@@ -60,7 +46,8 @@ def _list_and_prompt(manager, item_type, prompt_message, allow_empty=False):
             print(f"Available {item_type}:", ", ".join(items))
     except SmbZfsError as e:
         if "not set up" in str(e):
-             print(f"Note: Cannot list {item_type} as system is not yet set up.")
+            print(
+                f"Note: Cannot list {item_type} as system is not yet set up.")
         else:
             raise e
 
@@ -87,7 +74,8 @@ def wizard_setup(manager, args=None):
         macos_optimized = prompt_yes_no(
             "Enable macOS compatibility optimizations?", default="n"
         )
-        default_home_quota = prompt("Enter a default quota for user homes (e.g., 10G, optional)")
+        default_home_quota = prompt(
+            "Enter a default quota for user homes (e.g., 10G, optional)")
 
         print("\nSummary of actions:")
         print(f" - ZFS Pool: {pool}")
@@ -98,7 +86,8 @@ def wizard_setup(manager, args=None):
             print(f" - Default Home Quota: {default_home_quota}")
 
         if prompt_yes_no("Proceed with setup?", default="y"):
-            result = manager.setup(pool, server_name, workgroup, macos_optimized, default_home_quota)
+            result = manager.setup(
+                pool, server_name, workgroup, macos_optimized, default_home_quota)
             print(f"\nSuccess: {result}")
     except (SmbZfsError, ValueError) as e:
         print(f"\nError: {e}", file=sys.stderr)
@@ -112,10 +101,13 @@ def wizard_create_user(manager, args=None):
             raise ValueError("Username cannot be empty.")
 
         password = prompt_for_password(username)
-        allow_shell = prompt_yes_no("Allow shell access (/bin/bash)?", default="n")
+        allow_shell = prompt_yes_no(
+            "Allow shell access (/bin/bash)?", default="n")
 
-        groups_str = _list_and_prompt(manager, "groups", "Enter comma-separated groups to add user to (optional)", allow_empty=True)
-        groups = [g.strip() for g in groups_str.split(",")] if groups_str else []
+        groups_str = _list_and_prompt(
+            manager, "groups", "Enter comma-separated groups to add user to (optional)", allow_empty=True)
+        groups = [g.strip()
+                  for g in groups_str.split(",")] if groups_str else []
 
         result = manager.create_user(username, password, allow_shell, groups)
         print(f"\nSuccess: {result}")
@@ -136,8 +128,10 @@ def wizard_create_share(manager, args=None):
             raise ValueError("Dataset path cannot be empty.")
 
         comment = prompt("Enter a comment for the share (optional)")
-        owner = _list_and_prompt(manager, "users", "Enter the owner for the share's files (default: root)", allow_empty=True) or 'root'
-        group = _list_and_prompt(manager, "groups", "Enter the group for the share's files (default: smb_users)", allow_empty=True) or 'smb_users'
+        owner = _list_and_prompt(
+            manager, "users", "Enter the owner for the share's files (default: root)", allow_empty=True) or 'root'
+        group = _list_and_prompt(
+            manager, "groups", "Enter the group for the share's files (default: smb_users)", allow_empty=True) or 'smb_users'
 
         perms = prompt(
             "Enter file system permissions for the share root", default="0775"
@@ -147,7 +141,8 @@ def wizard_create_share(manager, args=None):
         )
         read_only = prompt_yes_no("Make the share read-only?", default="n")
         browseable = prompt_yes_no("Make the share browseable?", default="y")
-        quota = prompt("Enter a ZFS quota for this share (e.g., 100G, optional)")
+        quota = prompt(
+            "Enter a ZFS quota for this share (e.g., 100G, optional)")
 
         result = manager.create_share(
             share_name,
@@ -175,7 +170,8 @@ def wizard_create_group(manager, args=None):
             raise ValueError("Group name cannot be empty.")
 
         description = prompt("Enter a description for the group (optional)")
-        users_str = _list_and_prompt(manager, "users", "Enter comma-separated initial members (optional)", allow_empty=True)
+        users_str = _list_and_prompt(
+            manager, "users", "Enter comma-separated initial members (optional)", allow_empty=True)
         users = [u.strip() for u in users_str.split(",")] if users_str else []
 
         result = manager.create_group(group_name, description, users)
@@ -184,17 +180,24 @@ def wizard_create_group(manager, args=None):
     except (SmbZfsError, ValueError) as e:
         print(f"\nError: {e}", file=sys.stderr)
 
+
 def wizard_modify_group(manager, args=None):
     print("\n--- Modify Group Wizard ---")
     try:
-        group_name = _list_and_prompt(manager, "groups", "Enter the name of the group to modify")
-        if not group_name: return
+        group_name = _list_and_prompt(
+            manager, "groups", "Enter the name of the group to modify")
+        if not group_name:
+            return
 
-        add_users_str = _list_and_prompt(manager, "users", "Enter comma-separated users to ADD (optional)", allow_empty=True)
-        add_users = [u.strip() for u in add_users_str.split(',')] if add_users_str else None
+        add_users_str = _list_and_prompt(
+            manager, "users", "Enter comma-separated users to ADD (optional)", allow_empty=True)
+        add_users = [u.strip() for u in add_users_str.split(',')
+                     ] if add_users_str else None
 
-        remove_users_str = _list_and_prompt(manager, "users", "Enter comma-separated users to REMOVE (optional)", allow_empty=True)
-        remove_users = [u.strip() for u in remove_users_str.split(',')] if remove_users_str else None
+        remove_users_str = _list_and_prompt(
+            manager, "users", "Enter comma-separated users to REMOVE (optional)", allow_empty=True)
+        remove_users = [u.strip() for u in remove_users_str.split(
+            ',')] if remove_users_str else None
 
         if not add_users and not remove_users:
             print("No changes specified. Exiting.")
@@ -206,11 +209,14 @@ def wizard_modify_group(manager, args=None):
     except (SmbZfsError, ValueError) as e:
         print(f"\nError: {e}", file=sys.stderr)
 
+
 def wizard_modify_share(manager, args=None):
     print("\n--- Modify Share Wizard ---")
     try:
-        share_name = _list_and_prompt(manager, "shares", "Enter the name of the share to modify")
-        if not share_name: return
+        share_name = _list_and_prompt(
+            manager, "shares", "Enter the name of the share to modify")
+        if not share_name:
+            return
 
         print("Enter new values or press Enter to keep the current value.")
         share_info = manager.list_items("shares").get(share_name, {})
@@ -218,20 +224,29 @@ def wizard_modify_share(manager, args=None):
             raise SmbZfsError(f"Share '{share_name}' not found.")
 
         kwargs = {}
-        kwargs['comment'] = prompt("Comment", default=share_info.get('comment'))
-        kwargs['owner'] = _list_and_prompt(manager, "users", f"Owner [{share_info.get('owner')}]", allow_empty=True) or share_info.get('owner')
-        kwargs['group'] = _list_and_prompt(manager, "groups", f"Group [{share_info.get('group')}]", allow_empty=True) or share_info.get('group')
-        kwargs['permissions'] = prompt("Permissions", default=share_info.get('permissions'))
-        kwargs['valid_users'] = prompt("Valid Users", default=share_info.get('valid_users'))
-        kwargs['read_only'] = prompt_yes_no("Read-only?", 'y' if share_info.get('read_only') else 'n')
-        kwargs['browseable'] = prompt_yes_no("Browseable?", 'y' if share_info.get('browseable') else 'n')
-        kwargs['quota'] = prompt("Quota (e.g., 200G or 'none')", default=share_info.get('quota'))
+        kwargs['comment'] = prompt(
+            "Comment", default=share_info.get('comment'))
+        kwargs['owner'] = _list_and_prompt(
+            manager, "users", f"Owner [{share_info.get('owner')}]", allow_empty=True) or share_info.get('owner')
+        kwargs['group'] = _list_and_prompt(
+            manager, "groups", f"Group [{share_info.get('group')}]", allow_empty=True) or share_info.get('group')
+        kwargs['permissions'] = prompt(
+            "Permissions", default=share_info.get('permissions'))
+        kwargs['valid_users'] = prompt(
+            "Valid Users", default=share_info.get('valid_users'))
+        kwargs['read_only'] = prompt_yes_no(
+            "Read-only?", 'y' if share_info.get('read_only') else 'n')
+        kwargs['browseable'] = prompt_yes_no(
+            "Browseable?", 'y' if share_info.get('browseable') else 'n')
+        kwargs['quota'] = prompt(
+            "Quota (e.g., 200G or 'none')", default=share_info.get('quota'))
 
         result = manager.modify_share(share_name, **kwargs)
         print(f"\nSuccess: {result}")
 
     except (SmbZfsError, ValueError) as e:
         print(f"\nError: {e}", file=sys.stderr)
+
 
 def wizard_modify_setup(manager, args=None):
     print("\n--- Modify Global Setup Wizard ---")
@@ -245,10 +260,13 @@ def wizard_modify_setup(manager, args=None):
             'default_home_quota': manager._state.get('default_home_quota'),
         }
 
-        new_server_name = prompt("Server Name", default=current_state['server_name'])
+        new_server_name = prompt(
+            "Server Name", default=current_state['server_name'])
         new_workgroup = prompt("Workgroup", default=current_state['workgroup'])
-        new_macos = prompt_yes_no("macOS Optimized?", 'y' if current_state['macos_optimized'] else 'n')
-        new_quota_str = prompt("Default Home Quota (e.g., 50G or 'none')", default=current_state['default_home_quota'] or 'none')
+        new_macos = prompt_yes_no(
+            "macOS Optimized?", 'y' if current_state['macos_optimized'] else 'n')
+        new_quota_str = prompt("Default Home Quota (e.g., 50G or 'none')",
+                               default=current_state['default_home_quota'] or 'none')
 
         new_quota = new_quota_str if new_quota_str and new_quota_str.lower() != 'none' else None
 
@@ -272,20 +290,25 @@ def wizard_modify_setup(manager, args=None):
     except (SmbZfsError, ValueError) as e:
         print(f"\nError: {e}", file=sys.stderr)
 
+
 def wizard_modify_home(manager, args=None):
     print("\n--- Modify Home Quota Wizard ---")
     try:
-        username = _list_and_prompt(manager, "users", "Enter the user whose home you want to modify")
-        if not username: return
+        username = _list_and_prompt(
+            manager, "users", "Enter the user whose home you want to modify")
+        if not username:
+            return
 
         user_info = manager.list_items("users").get(username, {})
         home_dataset = user_info.get('home_dataset')
 
         if not home_dataset:
-            raise SmbZfsError(f"Could not find home dataset for user '{username}'.")
+            raise SmbZfsError(
+                f"Could not find home dataset for user '{username}'.")
 
         current_quota = manager._zfs.get_quota(home_dataset)
-        new_quota = prompt(f"Enter new quota for {username}'s home (e.g., 25G or 'none')", default=current_quota)
+        new_quota = prompt(
+            f"Enter new quota for {username}'s home (e.g., 25G or 'none')", default=current_quota)
 
         result = manager.modify_home(username, new_quota)
         print(f"\nSuccess: {result}")
@@ -297,8 +320,10 @@ def wizard_modify_home(manager, args=None):
 def wizard_delete_user(manager, args=None):
     print("\n--- Delete User Wizard ---")
     try:
-        username = _list_and_prompt(manager, "users", "Enter the username to delete")
-        if not username: return
+        username = _list_and_prompt(
+            manager, "users", "Enter the username to delete")
+        if not username:
+            return
 
         delete_data = prompt_yes_no(
             f"Delete user '{username}'s home directory and all its data?", default="n"
@@ -306,7 +331,8 @@ def wizard_delete_user(manager, args=None):
 
         if delete_data:
             if not confirm_destructive_action(
-                f"This will PERMANENTLY delete user '{username}' AND their home directory."
+                f"This will PERMANENTLY delete user '{username}' AND their home directory.",
+                False
             ):
                 return
 
@@ -319,8 +345,10 @@ def wizard_delete_user(manager, args=None):
 def wizard_delete_share(manager, args=None):
     print("\n--- Delete Share Wizard ---")
     try:
-        share_name = _list_and_prompt(manager, "shares", "Enter the name of the share to delete")
-        if not share_name: return
+        share_name = _list_and_prompt(
+            manager, "shares", "Enter the name of the share to delete")
+        if not share_name:
+            return
 
         delete_data = prompt_yes_no(
             f"Delete the ZFS dataset for share '{share_name}' and all its data?",
@@ -329,7 +357,8 @@ def wizard_delete_share(manager, args=None):
 
         if delete_data:
             if not confirm_destructive_action(
-                f"This will PERMANENTLY delete the ZFS dataset for share '{share_name}'."
+                f"This will PERMANENTLY delete the ZFS dataset for share '{share_name}'.",
+                False
             ):
                 return
 
@@ -342,8 +371,10 @@ def wizard_delete_share(manager, args=None):
 def wizard_delete_group(manager, args=None):
     print("\n--- Delete Group Wizard ---")
     try:
-        group_name = _list_and_prompt(manager, "groups", "Enter the name of the group to delete")
-        if not group_name: return
+        group_name = _list_and_prompt(
+            manager, "groups", "Enter the name of the group to delete")
+        if not group_name:
+            return
 
         result = manager.delete_group(group_name)
         print(f"\nSuccess: {result}")
@@ -363,7 +394,7 @@ def wizard_remove(manager, args=None):
         )
 
         message = "This will remove all configurations and potentially all user data and users created by this tool."
-        if confirm_destructive_action(message):
+        if confirm_destructive_action(message, False):
             result = manager.remove(delete_data, delete_users)
             print(f"\nSuccess: {result}")
     except SmbZfsError as e:
@@ -379,35 +410,48 @@ def main():
     parser.add_argument(
         "-v", "--version", action="version", version=f"{metadata.version(NAME)}"
     )
-    subparsers = parser.add_subparsers(dest="command", help="Available commands")
+    subparsers = parser.add_subparsers(
+        dest="command", help="Available commands")
     subparsers.required = True
 
-    p_setup = subparsers.add_parser("setup", help="Start the wizard to set up and configure Samba, ZFS, and Avahi.")
+    p_setup = subparsers.add_parser(
+        "setup", help="Start the wizard to set up and configure Samba, ZFS, and Avahi.")
     p_setup.set_defaults(func=wizard_setup)
 
-    p_create = subparsers.add_parser("create", help="Start the wizard to create a new user, share, or group.")
+    p_create = subparsers.add_parser(
+        "create", help="Start the wizard to create a new user, share, or group.")
     create_sub = p_create.add_subparsers(dest="create_type", required=True)
-    p_create_user = create_sub.add_parser("user", help="Start the new user wizard.")
+    p_create_user = create_sub.add_parser(
+        "user", help="Start the new user wizard.")
     p_create_user.set_defaults(func=wizard_create_user)
-    p_create_share = create_sub.add_parser("share", help="Start the new share wizard.")
+    p_create_share = create_sub.add_parser(
+        "share", help="Start the new share wizard.")
     p_create_share.set_defaults(func=wizard_create_share)
-    p_create_group = create_sub.add_parser("group", help="Start the new group wizard.")
+    p_create_group = create_sub.add_parser(
+        "group", help="Start the new group wizard.")
     p_create_group.set_defaults(func=wizard_create_group)
 
-    p_modify = subparsers.add_parser("modify", help="Start the wizard to modify an existing user, share, or group.")
+    p_modify = subparsers.add_parser(
+        "modify", help="Start the wizard to modify an existing user, share, or group.")
     modify_sub = p_modify.add_subparsers(dest="modify_type", required=True)
-    p_modify_group = modify_sub.add_parser("group", help="Start the modify group wizard.")
+    p_modify_group = modify_sub.add_parser(
+        "group", help="Start the modify group wizard.")
     p_modify_group.set_defaults(func=wizard_modify_group)
-    p_modify_share = modify_sub.add_parser("share", help="Start the modify share wizard.")
+    p_modify_share = modify_sub.add_parser(
+        "share", help="Start the modify share wizard.")
     p_modify_share.set_defaults(func=wizard_modify_share)
-    p_modify_setup = modify_sub.add_parser("setup", help="Start the modify global setup wizard.")
+    p_modify_setup = modify_sub.add_parser(
+        "setup", help="Start the modify global setup wizard.")
     p_modify_setup.set_defaults(func=wizard_modify_setup)
-    p_modify_home = modify_sub.add_parser("home", help="Start the modify home wizard.")
+    p_modify_home = modify_sub.add_parser(
+        "home", help="Start the modify home wizard.")
     p_modify_home.set_defaults(func=wizard_modify_home)
 
-    p_delete = subparsers.add_parser("delete", help="Start the wizard to delete a user, share, or group.")
+    p_delete = subparsers.add_parser(
+        "delete", help="Start the wizard to delete a user, share, or group.")
     delete_sub = p_delete.add_subparsers(dest="delete_type", required=True)
-    p_delete_user = delete_sub.add_parser("user", help="Start the delete user wizard.")
+    p_delete_user = delete_sub.add_parser(
+        "user", help="Start the delete user wizard.")
     p_delete_user.set_defaults(func=wizard_delete_user)
     p_delete_share = delete_sub.add_parser(
         "share", help="Start the delete share wizard."
