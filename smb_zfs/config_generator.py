@@ -81,19 +81,19 @@ class ConfigGenerator:
         with open(AVAHI_SMB_SERVICE, "w") as f:
             f.write(content)
 
-    def add_share_to_conf(self, share_data):
+    def add_share_to_conf(self, share_name, share_data):
         with open(SMB_CONF, "a") as f:
             f.write(f"""
-[{share_data["name"]}]
-    comment = {share_data["comment"]}
-    path = {share_data["path"]}
-    browseable = {"yes" if share_data["browseable"] else "no"}
-    read only = {"yes" if share_data["read_only"] else "no"}
+[{share_name}]
+    comment = {share_data['smb_config']["comment"]}
+    path = {share_data['dataset']["mount_point"]}
+    browseable = {"yes" if share_data['smb_config']["browseable"] else "no"}
+    read only = {"yes" if share_data['smb_config']["read_only"] else "no"}
     create mask = 0664
     directory mask = 0775
-    valid users = {share_data["valid_users"]}
-    force user = {share_data["owner"]}
-    force group = {share_data["group"]}
+    valid users = {share_data['smb_config']["valid_users"]}
+    force user = {share_data['system']["owner"]}
+    force group = {share_data['system']["group"]}
 """)
 
     def remove_share_from_conf(self, share_name):

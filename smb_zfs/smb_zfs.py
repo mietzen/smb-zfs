@@ -78,14 +78,14 @@ class SmbZfsManager:
             raise SmbZfsError(f"System user '{username}' already exists.")
 
         pool = self._state.get("zfs_pool")
-        home_dataset = f"{pool}/homes/{username}"
+        home_dataset_name = f"{pool}/homes/{username}"
 
-        self._zfs.create_dataset(home_dataset)
-        home_mountpoint = self._zfs.get_mountpoint(home_dataset)
+        self._zfs.create_dataset(home_dataset_name)
+        home_mountpoint = self._zfs.get_mountpoint(home_dataset_name)
 
         default_home_quota = self._state.get("default_home_quota")
         if default_home_quota:
-            self._zfs.set_quota(home_dataset, default_home_quota)
+            self._zfs.set_quota(home_dataset_name, default_home_quota)
 
         self._system.add_system_user(
             username,
@@ -112,14 +112,18 @@ class SmbZfsManager:
                 if self._state.get_item("groups", group):
                     self._system.add_user_to_group(username, group)
                     user_groups.append(group)
-
-        user_config = {
+        
+        user_data = {
             "shell_access": allow_shell,
-            "home_dataset": home_dataset,
+            "dataset": {
+                "name": home_dataset_name,
+                "mount_point": home_mountpoint,
+                "quota": default_home_quota,
+            },
             "groups": user_groups,
             "created": datetime.utcnow().isoformat(),
         }
-        self._state.set_item("users", username, user_config)
+        self._state.set_item("users", username, user_data)
         return f"User '{username}' created successfully."
 
     def delete_user(self, username, delete_data=False):
@@ -133,7 +137,7 @@ class SmbZfsManager:
             self._system.delete_system_user(username)
 
         if delete_data:
-            self._zfs.destroy_dataset(user_info["home_dataset"])
+            self._zfs.destroy_dataset(user_info["dataset"]["name"])
 
         self._state.delete_item("users", username)
         return f"User '{username}' deleted successfully."
@@ -208,33 +212,30 @@ class SmbZfsManager:
         os.chmod(mount_point, int(perms, 8))
 
         share_data = {
-            "name": name,
-            "comment": comment,
-            "path": mount_point,
-            "browseable": browseable,
-            "read_only": read_only,
-            "valid_users": valid_users or f"@{group}",
-            "owner": owner,
-            "group": group,
+            "dataset": {
+                "name": full_dataset,
+                "mount_point": mount_point,
+                "quota": quota,
+            },
+            "smb_config": {
+                "comment": comment,
+                "browseable": browseable,
+                "read_only": read_only,
+                "valid_users": valid_users or f"@{group}",
+            },
+            "system": {
+                "owner": owner,
+                "group": group,
+                "permissions": perms,
+            },
+            "created": datetime.utcnow().isoformat(),
         }
-        self._config.add_share_to_conf(share_data)
+
+        self._config.add_share_to_conf(name, share_data)
         self._system.test_samba_config()
         self._system.reload_samba()
 
-        state_data = {
-            "dataset": full_dataset,
-            "path": mount_point,
-            "comment": comment,
-            "owner": owner,
-            "group": group,
-            "permissions": perms,
-            "valid_users": valid_users or f"@{group}",
-            "read_only": read_only,
-            "browseable": browseable,
-            "quota": quota,
-            "created": datetime.utcnow().isoformat(),
-        }
-        self._state.set_item("shares", name, state_data)
+        self._state.set_item("shares", name, share_data)
         return f"Share '{name}' created successfully."
 
     def delete_share(self, name, delete_data=False):
@@ -248,7 +249,7 @@ class SmbZfsManager:
         self._system.reload_samba()
 
         if delete_data:
-            self._zfs.destroy_dataset(share_info["dataset"])
+            self._zfs.destroy_dataset(share_info["dataset"]["name"])
 
         self._state.delete_item("shares", name)
         return f"Share '{name}' deleted successfully."
@@ -283,46 +284,65 @@ class SmbZfsManager:
         if not share_info:
             raise SmbZfsError(f"Share '{share_name}' is not managed by this tool.")
 
-        # Update share_info with provided kwargs, filtering out None values
-        for key, value in kwargs.items():
-            if value is not None:
-                share_info[key] = value
+        # Flag to track if smb.conf needs a reload
+        samba_config_changed = False
 
+        # Handle quota change
         if 'quota' in kwargs and kwargs['quota'] is not None:
-            self._zfs.set_quota(share_info["dataset"], kwargs['quota'])
-            
-        # Apply filesystem changes if needed
-        if any(k in kwargs for k in ['owner', 'group', 'permissions']):
-            mount_point = share_info['path']
-            uid = pwd.getpwnam(share_info['owner']).pw_uid
-            gid = grp.getgrnam(share_info['group']).gr_gid
+            new_quota = kwargs['quota'] if kwargs['quota'].lower() != 'none' else None
+            share_info['dataset']['quota'] = new_quota
+            self._zfs.set_quota(share_info["dataset"]["name"], new_quota)
+
+        # Handle system-level changes (owner, group, perms)
+        system_changed = False
+        if 'owner' in kwargs and kwargs['owner'] is not None:
+            share_info['system']['owner'] = kwargs['owner']
+            system_changed = True
+        if 'group' in kwargs and kwargs['group'] is not None:
+            share_info['system']['group'] = kwargs['group']
+            system_changed = True
+        if 'perms' in kwargs and kwargs['perms'] is not None:
+            share_info['system']['permissions'] = kwargs['perms']
+            system_changed = True
+
+        if system_changed:
+            mount_point = share_info['dataset']['mount_point']
+            uid = pwd.getpwnam(share_info['system']['owner']).pw_uid
+            gid = grp.getgrnam(share_info['system']['group']).gr_gid
             os.chown(mount_point, uid, gid)
-            os.chmod(mount_point, int(share_info['permissions'], 8))
+            os.chmod(mount_point, int(share_info['system']['permissions'], 8))
+            samba_config_changed = True # force user/group is in smb.conf
 
-        # Re-write the share configuration in smb.conf
-        self._config.remove_share_from_conf(share_name)
-        conf_data = {
-            "name": share_name,
-            "comment": share_info['comment'],
-            "path": share_info['path'],
-            "browseable": share_info['browseable'],
-            "read_only": share_info['read_only'],
-            "valid_users": share_info['valid_users'],
-            "owner": share_info['owner'],
-            "group": share_info['group'],
-        }
-        self._config.add_share_to_conf(conf_data)
-        self._system.test_samba_config()
-        self._system.reload_samba()
+        # Handle Samba-specific config changes
+        if 'comment' in kwargs and kwargs['comment'] is not None:
+            share_info['smb_config']['comment'] = kwargs['comment']
+            samba_config_changed = True
+        if 'valid_users' in kwargs and kwargs['valid_users'] is not None:
+            share_info['smb_config']['valid_users'] = kwargs['valid_users']
+            samba_config_changed = True
+        if 'readonly' in kwargs and kwargs['readonly'] is not None:
+            share_info['smb_config']['read_only'] = kwargs['readonly']
+            samba_config_changed = True
+        if 'no_browse' in kwargs and kwargs['no_browse'] is not None:
+            share_info['smb_config']['browseable'] = not kwargs['no_browse']
+            samba_config_changed = True
 
+        # Save the updated state
         self._state.set_item("shares", share_name, share_info)
+
+        # If any samba-related config changed, regenerate the conf entry and reload
+        if samba_config_changed:
+            self._config.remove_share_from_conf(share_name)
+            self._config.add_share_to_conf(share_name, share_info)
+            self._system.test_samba_config()
+            self._system.reload_samba()
+        
         return f"Share '{share_name}' modified successfully."
 
     def modify_setup(self, **kwargs):
         self._check_initialized()
 
         # Update state with any new values.
-        # kwargs contains only the arguments that were actually passed.
         for key, value in kwargs.items():
             if value is None and key == 'default_home_quota':
                 self._state.set(key, None)
@@ -341,17 +361,7 @@ class SmbZfsManager:
             # Re-add all existing shares to the new config
             all_shares = self.list_items("shares")
             for share_name, share_info in all_shares.items():
-                conf_data = {
-                    "name": share_name,
-                    "comment": share_info['comment'],
-                    "path": share_info['path'],
-                    "browseable": share_info['browseable'],
-                    "read_only": share_info['read_only'],
-                    "valid_users": share_info['valid_users'],
-                    "owner": share_info['owner'],
-                    "group": share_info['group'],
-                }
-                self._config.add_share_to_conf(conf_data)
+                self._config.add_share_to_conf(share_name, share_info)
 
             self._system.test_samba_config()
             self._system.reload_samba()
@@ -364,11 +374,10 @@ class SmbZfsManager:
         if not user_info:
             raise SmbZfsError(f"User '{username}' is not managed by this tool.")
 
-        home_dataset = user_info.get("home_dataset")
-        if not home_dataset:
-            raise SmbZfsError(f"Home dataset not found for user '{username}'.")
-            
+        home_dataset = user_info["dataset"]["name"]
         self._zfs.set_quota(home_dataset, quota)
+        user_info["dataset"]["quota"] = quota
+        self._state.set_item("users", username, user_info)
         return f"Quota for user '{username}' has been set to {quota}."
 
     def change_password(self, username, new_password):
@@ -390,17 +399,16 @@ class SmbZfsManager:
         
         items = self._state.list_items(category)
 
+        # Update with live data
         if category == "users":
             for name, data in items.items():
-                if "home_dataset" in data:
-                    quota = self._zfs.get_quota(data["home_dataset"])
-                    data["quota"] = quota if quota and quota != 'none' else "Not Set"
+                quota = self._zfs.get_quota(data["dataset"]["name"])
+                data["dataset"]["quota"] = quota if quota and quota != 'none' else "Not Set"
         
         if category == "shares":
             for name, data in items.items():
-                if "dataset" in data:
-                    quota = self._zfs.get_quota(data["dataset"])
-                    data["quota"] = quota if quota and quota != 'none' else "Not Set"
+                quota = self._zfs.get_quota(data["dataset"]["name"])
+                data["dataset"]["quota"] = quota if quota and quota != 'none' else "Not Set"
 
         return items
 
@@ -426,11 +434,11 @@ class SmbZfsManager:
 
         if delete_data and pool:
             for user_info in users.values():
-                self._zfs.destroy_dataset(user_info["home_dataset"])
+                self._zfs.destroy_dataset(user_info["dataset"]["name"])
             all_shares = self.list_items("shares")
             for share_info in all_shares.values():
                 if "dataset" in share_info:
-                    self._zfs.destroy_dataset(share_info["dataset"])
+                    self._zfs.destroy_dataset(share_info["dataset"]["name"])
             self._zfs.destroy_dataset(f"{pool}/homes")
 
         self._system.stop_services()
