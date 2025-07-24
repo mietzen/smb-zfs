@@ -6,13 +6,22 @@ from datetime import datetime
 
 from . import (
     ConfigGenerator,
-    SmbZfsError,
     StateManager,
     System,
     Zfs,
     AVAHI_SMB_SERVICE,
     SMB_CONF,
     NAME,
+)
+from .errors import (
+    SmbZfsError,
+    NotInitializedError,
+    AlreadyInitializedError,
+    ItemExistsError,
+    ItemNotFoundError,
+    InvalidNameError,
+    PrerequisiteError,
+    ImmutableError,
 )
 
 
@@ -25,17 +34,17 @@ class SmbZfsManager:
 
     def _check_initialized(self):
         if not self._state.is_initialized():
-            raise SmbZfsError("System not set up. Run 'setup' first.")
+            raise NotInitializedError()
 
     def setup(self, pool, server_name, workgroup, macos_optimized=False, default_home_quota=None):
         if self._state.is_initialized():
-            raise SmbZfsError("System is already set up.")
+            raise AlreadyInitializedError()
 
         # Check for required Debian packages instead of commands
         required_packages = ["zfsutils-linux", "samba", "avahi-daemon"]
         for pkg in required_packages:
             if not self._system.is_package_installed(pkg):
-                raise SmbZfsError(
+                raise PrerequisiteError(
                     f"Required package '{pkg}' is not installed. Please install it first."
                 )
 
@@ -73,9 +82,9 @@ class SmbZfsManager:
     def create_user(self, username, password, allow_shell=False, groups=None):
         self._check_initialized()
         if self._state.get_item("users", username):
-            raise SmbZfsError(f"User '{username}' is already managed by this tool.")
+            raise ItemExistsError("user", username)
         if self._system.user_exists(username):
-            raise SmbZfsError(f"System user '{username}' already exists.")
+            raise ItemExistsError("system user", username)
 
         pool = self._state.get("zfs_pool")
         home_dataset_name = f"{pool}/homes/{username}"
@@ -112,7 +121,7 @@ class SmbZfsManager:
                 if self._state.get_item("groups", group):
                     self._system.add_user_to_group(username, group)
                     user_groups.append(group)
-        
+
         user_data = {
             "shell_access": allow_shell,
             "dataset": {
@@ -130,7 +139,7 @@ class SmbZfsManager:
         self._check_initialized()
         user_info = self._state.get_item("users", username)
         if not user_info:
-            raise SmbZfsError(f"User '{username}' is not managed by this tool.")
+            raise ItemNotFoundError("user", username)
 
         self._system.delete_samba_user(username)
         if self._system.user_exists(username):
@@ -145,11 +154,11 @@ class SmbZfsManager:
     def create_group(self, groupname, description="", members=None):
         self._check_initialized()
         if not re.match(r"^[a-zA-Z0-9._-]+$", groupname):
-            raise SmbZfsError("Group name contains invalid characters.")
+            raise InvalidNameError("Group name contains invalid characters.")
         if self._state.get_item("groups", groupname):
-            raise SmbZfsError(f"Group '{groupname}' is already managed by this tool.")
+            raise ItemExistsError("group", groupname)
         if self._system.group_exists(groupname):
-            raise SmbZfsError(f"System group '{groupname}' already exists.")
+            raise ItemExistsError("system group", groupname)
 
         self._system.add_system_group(groupname)
 
@@ -171,9 +180,9 @@ class SmbZfsManager:
     def delete_group(self, groupname):
         self._check_initialized()
         if not self._state.get_item("groups", groupname):
-            raise SmbZfsError(f"Group '{groupname}' is not managed by this tool.")
+            raise ItemNotFoundError("group", groupname)
         if groupname == "smb_users":
-            raise SmbZfsError("Cannot delete the mandatory 'smb_users' group.")
+            raise ImmutableError("Cannot delete the mandatory 'smb_users' group.")
 
         if self._system.group_exists(groupname):
             self._system.delete_system_group(groupname)
@@ -196,7 +205,7 @@ class SmbZfsManager:
     ):
         self._check_initialized()
         if self._state.get_item("shares", name):
-            raise SmbZfsError(f"Share '{name}' already exists.")
+            raise ItemExistsError("share", name)
 
         pool = self._state.get("zfs_pool")
         full_dataset = f"{pool}/{dataset_path}"
@@ -242,7 +251,7 @@ class SmbZfsManager:
         self._check_initialized()
         share_info = self._state.get_item("shares", name)
         if not share_info:
-            raise SmbZfsError(f"Share '{name}' is not managed by this tool.")
+            raise ItemNotFoundError("share", name)
 
         self._config.remove_share_from_conf(name)
         self._system.test_samba_config()
@@ -258,7 +267,7 @@ class SmbZfsManager:
         self._check_initialized()
         group_info = self._state.get_item("groups", groupname)
         if not group_info:
-            raise SmbZfsError(f"Group '{groupname}' is not managed by this tool.")
+            raise ItemNotFoundError("group", groupname)
 
         current_members = set(group_info.get("members", []))
         if add_users:
@@ -282,7 +291,7 @@ class SmbZfsManager:
         self._check_initialized()
         share_info = self._state.get_item("shares", share_name)
         if not share_info:
-            raise SmbZfsError(f"Share '{share_name}' is not managed by this tool.")
+            raise ItemNotFoundError("share", share_name)
 
         # Flag to track if smb.conf needs a reload
         samba_config_changed = False
@@ -336,7 +345,7 @@ class SmbZfsManager:
             self._config.add_share_to_conf(share_name, share_info)
             self._system.test_samba_config()
             self._system.reload_samba()
-        
+
         return f"Share '{share_name}' modified successfully."
 
     def modify_setup(self, **kwargs):
@@ -365,14 +374,14 @@ class SmbZfsManager:
 
             self._system.test_samba_config()
             self._system.reload_samba()
-            
+
         return "Global setup modified successfully."
 
     def modify_home(self, username, quota):
         self._check_initialized()
         user_info = self._state.get_item("users", username)
         if not user_info:
-            raise SmbZfsError(f"User '{username}' is not managed by this tool.")
+            raise ItemNotFoundError("user", username)
 
         home_dataset = user_info["dataset"]["name"]
         self._zfs.set_quota(home_dataset, quota)
@@ -384,7 +393,7 @@ class SmbZfsManager:
         self._check_initialized()
         user_info = self._state.get_item("users", username)
         if not user_info:
-            raise SmbZfsError(f"User '{username}' is not managed by this tool.")
+            raise ItemNotFoundError("user", username)
 
         if user_info.get("shell_access"):
             self._system.set_system_password(username, new_password)
@@ -396,7 +405,7 @@ class SmbZfsManager:
         self._check_initialized()
         if category not in ["users", "groups", "shares"]:
             raise SmbZfsError("Invalid category to list.")
-        
+
         items = self._state.list_items(category)
 
         # Update with live data
@@ -404,7 +413,7 @@ class SmbZfsManager:
             for name, data in items.items():
                 quota = self._zfs.get_quota(data["dataset"]["name"])
                 data["dataset"]["quota"] = quota if quota and quota != 'none' else "Not Set"
-        
+
         if category == "shares":
             for name, data in items.items():
                 quota = self._zfs.get_quota(data["dataset"]["name"])
