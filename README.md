@@ -27,18 +27,18 @@ options:
   -v, --version         show program's version number and exit
 ```
 
- ## Prerequisites
+## Prerequisites
 
-- Debian 12 - Bookworm
-- ZFS installed with a pre-existing pool
-- Python 3.11
-- `sudo` privileges
+  - Debian 12 - Bookworm
+  - ZFS installed with a pre-existing pool
+  - Python 3.11
+  - `sudo` privileges
 
 ## Installation
 
 Install package:
 
-```Shell
+```shell
 sudo apt update
 sudo apt install -y pipx samba avahi-daemon
 sudo PIPX_HOME=/opt/pipx PIPX_BIN_DIR=/usr/local/bin pipx install smb-zfs
@@ -57,7 +57,7 @@ This makes the `smb-zfs` and `smb-zfs-wizard` commands available system-wide.
 
 ## Quick Start: Use the Wizard for Guided Setup
 
-```Shell
+```shell
 $ smb-zfs --help
 usage: smb-zfs [-h] [-v] {setup,create,modify,delete,list,passwd,remove} ...
 
@@ -81,8 +81,7 @@ options:
 
 Example setup:
 
-
-```Shell
+```shell
 $ smb-zfs-wizard setup
 
 --- Initial System Setup Wizard ---
@@ -91,18 +90,20 @@ Enter the name of the ZFS pool to use: tank
 Enter the server's NetBIOS name [nas]:
 Enter the workgroup name [WORKGROUP]:
 Enable macOS compatibility optimizations? [y/N]  [n]: y
+Enter a default quota for user homes (e.g., 10G, optional): 20G
 
 Summary of actions:
  - ZFS Pool: tank
  - Server Name: nas
  - Workgroup: WORKGROUP
  - macOS Optimized: True
+ - Default Home Quota: 20G
 Proceed with setup? [Y/n]  [y]:
 
 Success: Setup completed successfully.
 ```
 
-```Shell
+```shell
 $ smb-zfs-wizard create user
 
 --- Create New User Wizard ---
@@ -116,7 +117,7 @@ Enter comma-separated groups to add user to (optional): smb_users
 Success: User 'nils' created successfully.
 ```
 
-```Shell
+```shell
 $ smb-zfs-wizard create share
 
 --- Create New Share Wizard ---
@@ -131,6 +132,7 @@ Enter file system permissions for the share root [0775]:
 Enter valid users/groups (e.g., @smb_users) [@smb_users]:
 Make the share read-only? [y/N]  [n]:
 Make the share browseable? [Y/n]  [y]:
+Enter a ZFS quota for this share (e.g., 100G, optional): 500G
 
 Success: Share 'media' created successfully.
 ```
@@ -141,32 +143,38 @@ All commands must be run with root privileges.
 
 Initial Setup:
 
-```Shell
-sudo smb-zfs install --pool <your-zfs-pool>
+```shell
+sudo smb-zfs install --pool <your-zfs-pool> --default-home-quota 20G
 ```
 
 Create a User:
 
-```Shell
+```shell
 sudo smb-zfs create user john --shell
 ```
 
 Create a Share:
 
-```Shell
-# Creates the dataset 'your-zfs-pool/data/media'
-sudo smb-zfs create share media --dataset data/media
+```shell
+# Creates the dataset 'your-zfs-pool/data/media' with a 500G quota
+sudo smb-zfs create share media --dataset data/media --quota 500G
+```
+
+Modify a Share's Quota:
+
+```shell
+sudo smb-zfs modify share media --quota 600G
 ```
 
 ## Update `smb-zfs`
 
-```Shell
+```shell
 pipx upgrade smb-zfs
 ```
 
 ## Uninstallation
 
-```Shell
+```shell
 sudo smb-zfs-wizard remove
 sudo pipx remove smb-zfs
 

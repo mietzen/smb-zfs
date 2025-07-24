@@ -2,7 +2,7 @@ import json
 import os
 import shutil
 
-from . import SmbZfsError
+from .errors import SmbZfsError
 
 
 class StateManager:
@@ -20,6 +20,7 @@ class StateManager:
             "server_name": None,
             "workgroup": None,
             "macos_optimized": False,
+            "default_home_quota": None,
             "users": {},
             "shares": {},
             "groups": {},

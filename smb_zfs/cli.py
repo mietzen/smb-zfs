@@ -60,12 +60,14 @@ def cmd_setup(manager, args):
         print(f"    - Server Name: {server_name}")
         print(f"    - Workgroup: {workgroup}")
         print(f"    - macOS optimized: {args.macos}")
+        if args.default_home_quota:
+            print(f"    - Default Home Quota: {args.default_home_quota}")
         print(f"  - Generate {manager._config.AVAHI_SMB_SERVICE}")
         print("  - Enable and start smbd, nmbd, avahi-daemon services")
         print(f"  - Initialize state file at {manager._state.path}")
         return
 
-    result = manager.setup(args.pool, server_name, workgroup, args.macos)
+    result = manager.setup(args.pool, server_name, workgroup, args.macos, args.default_home_quota)
     print(result)
 
 
@@ -84,6 +86,8 @@ def cmd_create_user(manager, args):
         print(
             f"  - Create ZFS home dataset: {manager._state.get('zfs_pool')}/homes/{args.user}"
         )
+        if manager._state.get('default_home_quota'):
+            print(f"  - Set ZFS quota: {manager._state.get('default_home_quota')}")
         print("  - Set permissions on home directory")
         print(f"  - Add Samba user: {args.user}")
         print("  - Add user to group 'smb_users'")
@@ -106,6 +110,8 @@ def cmd_create_share(manager, args):
         print(
             f"  - Create ZFS dataset: {manager._state.get('zfs_pool')}/{args.dataset}"
         )
+        if args.quota:
+            print(f"  - Set ZFS quota to {args.quota}")
         print(
             f"  - Set ownership to {args.owner}:{args.group} and permissions to {args.perms}"
         )
@@ -125,6 +131,7 @@ def cmd_create_share(manager, args):
         valid_users=args.valid_users,
         read_only=args.readonly,
         browseable=not args.no_browse,
+        quota=args.quota,
     )
     print(result)
 
@@ -179,6 +186,7 @@ def cmd_modify_share(manager, args):
         'permissions': args.perms,
         'owner': args.owner,
         'group': args.group,
+        'quota': args.quota,
     }
     # Filter out unset arguments
     kwargs = {k: v for k, v in kwargs.items() if v is not None}
@@ -370,6 +378,9 @@ def main():
         "--macos", action="store_true", help="Enable macOS compatibility optimizations."
     )
     p_setup.add_argument(
+        "--default-home-quota", help="Set a default quota for user home directories (e.g., 10G)."
+    )
+    p_setup.add_argument(
         "--dry-run",
         action="store_true",
         help="Don't change anything just summarize the changes",
@@ -442,6 +453,9 @@ def main():
         help="Hide the share from network browsing (default: browseable).",
     )
     p_create_share.add_argument(
+        "--quota", help="Set a ZFS quota for the share (e.g., 100G)."
+    )
+    p_create_share.add_argument(
         "--dry-run",
         action="store_true",
         help="Don't change anything just summarize the changes",
@@ -483,6 +497,7 @@ def main():
     p_modify_share.add_argument("--valid-users", help="New list of allowed users/groups.")
     p_modify_share.add_argument("--readonly", action=argparse.BooleanOptionalAction, help="Set the share as read-only.")
     p_modify_share.add_argument("--no-browse", action=argparse.BooleanOptionalAction, help="Hide the share from network browsing.")
+    p_modify_share.add_argument("--quota", help="New ZFS quota for the share (e.g., 200G). Use 'none' to remove.")
     p_modify_share.add_argument('--dry-run', action='store_true', help="Don't change anything just summarize the changes")
     p_modify_share.set_defaults(func=cmd_modify_share)
 

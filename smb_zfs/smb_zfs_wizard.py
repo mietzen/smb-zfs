@@ -98,15 +98,18 @@ def wizard_setup(manager, args=None):
         macos_optimized = prompt_yes_no(
             "Enable macOS compatibility optimizations?", default="n"
         )
+        default_home_quota = prompt("Enter a default quota for user homes (e.g., 10G, optional)")
 
         print("\nSummary of actions:")
         print(f" - ZFS Pool: {pool}")
         print(f" - Server Name: {server_name}")
         print(f" - Workgroup: {workgroup}")
         print(f" - macOS Optimized: {macos_optimized}")
+        if default_home_quota:
+            print(f" - Default Home Quota: {default_home_quota}")
 
         if prompt_yes_no("Proceed with setup?", default="y"):
-            result = manager.setup(pool, server_name, workgroup, macos_optimized)
+            result = manager.setup(pool, server_name, workgroup, macos_optimized, default_home_quota)
             print(f"\nSuccess: {result}")
     except (SmbZfsError, ValueError) as e:
         print(f"\nError: {e}", file=sys.stderr)
@@ -155,6 +158,7 @@ def wizard_create_share(manager, args=None):
         )
         read_only = prompt_yes_no("Make the share read-only?", default="n")
         browseable = prompt_yes_no("Make the share browseable?", default="y")
+        quota = prompt("Enter a ZFS quota for this share (e.g., 100G, optional)")
 
         result = manager.create_share(
             share_name,
@@ -166,6 +170,7 @@ def wizard_create_share(manager, args=None):
             valid_users,
             read_only,
             browseable,
+            quota,
         )
         print(f"\nSuccess: {result}")
 
@@ -231,7 +236,8 @@ def wizard_modify_share(manager, args=None):
         kwargs['valid_users'] = prompt("Valid Users", default=share_info.get('valid_users'))
         kwargs['read_only'] = prompt_yes_no("Read-only?", 'y' if share_info.get('read_only') else 'n')
         kwargs['browseable'] = prompt_yes_no("Browseable?", 'y' if share_info.get('browseable') else 'n')
-
+        kwargs['quota'] = prompt("Quota (e.g., 200G or 'none')", default=share_info.get('quota'))
+        
         result = manager.modify_share(share_name, **kwargs)
         print(f"\nSuccess: {result}")
 

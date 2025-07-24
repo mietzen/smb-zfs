@@ -1,7 +1,6 @@
 import grp
 import pwd
 import subprocess
-import shutil
 
 from .errors import SmbZfsError
 from .const import SMB_CONF

@@ -30,3 +30,15 @@ class Zfs:
     def destroy_dataset(self, dataset):
         if self.dataset_exists(dataset):
             self._system._run(["zfs", "destroy", "-r", dataset])
+
+    def set_quota(self, dataset, quota):
+        if self.dataset_exists(dataset):
+            self._system._run(["zfs", "set", f"quota={quota}", dataset])
+
+    def get_quota(self, dataset):
+        if self.dataset_exists(dataset):
+            result = self._system._run(
+                ["zfs", "get", "-H", "-o", "value", "quota", dataset]
+            )
+            return result.stdout.strip()
+        return None

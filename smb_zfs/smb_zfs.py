@@ -27,7 +27,7 @@ class SmbZfsManager:
         if not self._state.is_initialized():
             raise SmbZfsError("System not set up. Run 'setup' first.")
 
-    def setup(self, pool, server_name, workgroup, macos_optimized=False):
+    def setup(self, pool, server_name, workgroup, macos_optimized=False, default_home_quota=None):
         if self._state.is_initialized():
             raise SmbZfsError("System is already set up.")
 
@@ -57,6 +57,7 @@ class SmbZfsManager:
         self._state.set("server_name", server_name)
         self._state.set("workgroup", workgroup)
         self._state.set("macos_optimized", macos_optimized)
+        self._state.set("default_home_quota", default_home_quota)
 
         self._state.set_item(
             "groups",
@@ -81,6 +82,10 @@ class SmbZfsManager:
 
         self._zfs.create_dataset(home_dataset)
         home_mountpoint = self._zfs.get_mountpoint(home_dataset)
+
+        default_home_quota = self._state.get("default_home_quota")
+        if default_home_quota:
+            self._zfs.set_quota(home_dataset, default_home_quota)
 
         self._system.add_system_user(
             username,
@@ -183,6 +188,7 @@ class SmbZfsManager:
         valid_users=None,
         read_only=False,
         browseable=True,
+        quota=None,
     ):
         self._check_initialized()
         if self._state.get_item("shares", name):
@@ -192,6 +198,8 @@ class SmbZfsManager:
         full_dataset = f"{pool}/{dataset_path}"
 
         self._zfs.create_dataset(full_dataset)
+        if quota:
+            self._zfs.set_quota(full_dataset, quota)
         mount_point = self._zfs.get_mountpoint(full_dataset)
 
         uid = pwd.getpwnam(owner).pw_uid
@@ -223,6 +231,7 @@ class SmbZfsManager:
             "valid_users": valid_users or f"@{group}",
             "read_only": read_only,
             "browseable": browseable,
+            "quota": quota,
             "created": datetime.utcnow().isoformat(),
         }
         self._state.set_item("shares", name, state_data)
@@ -279,6 +288,9 @@ class SmbZfsManager:
             if value is not None:
                 share_info[key] = value
 
+        if 'quota' in kwargs and kwargs['quota'] is not None:
+            self._zfs.set_quota(share_info["dataset"], kwargs['quota'])
+            
         # Apply filesystem changes if needed
         if any(k in kwargs for k in ['owner', 'group', 'permissions']):
             mount_point = share_info['path']
