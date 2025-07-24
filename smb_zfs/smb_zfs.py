@@ -413,13 +413,11 @@ class SmbZfsManager:
         if remove_users:
             for user in remove_users:
                 if not self._state.get_item("users", user):
-                    # Check if user is actually in the group before trying to remove
-                    if user in current_members:
-                        self._system.remove_user_from_group(user, groupname)
-                        current_members.discard(user)
-                else:
                     raise ItemNotFoundError("user", user)
-
+                
+                if user in current_members:
+                    self._system.remove_user_from_group(user, groupname)
+                    current_members.discard(user)
 
         group_info["members"] = sorted(list(current_members))
         self._state.set_item("groups", groupname, group_info)
