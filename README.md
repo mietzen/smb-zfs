@@ -8,19 +8,20 @@ It provides a reliable interface for common administrative tasks through two mod
 
 ```text
 $ smb-zfs -h
-usage: smb-zfs [-h] [-v] {install,create,delete,list,passwd,uninstall} ...
+usage: smb-zfs [-h] [-v] {setup,create,modify,delete,list,passwd,remove} ...
 
 A tool to manage Samba on a ZFS-backed system.
 
 positional arguments:
-  {install,create,delete,list,passwd,uninstall}
+  {setup,create,modify,delete,list,passwd,remove}
                         Available commands
-    install             Initial setup of Samba, ZFS, and Avahi.
+    setup               Set up and configure Samba, ZFS, and Avahi.
     create              Create a new user, share, or group.
-    delete              Remove a user, share, or group.
-    list                List all items of a specific type.
-    passwd              Change a user's password.
-    uninstall           Remove all configurations, data, and packages.
+    modify              Modify an existing user, share, or group.
+    delete              Delete a user, share, or group.
+    list                List all managed users, shares, or groups.
+    passwd              Change a user's Samba password.
+    remove              Uninstall smb-zfs and remove all related configurations and data.
 
 options:
   -h, --help            show this help message and exit
