@@ -324,7 +324,11 @@ class SmbZfsManager:
         # Update state with any new values.
         # kwargs contains only the arguments that were actually passed.
         for key, value in kwargs.items():
-            self._state.set(key, value)
+            if value is None and key == 'default_home_quota':
+                self._state.set(key, None)
+            elif value is not None:
+                self._state.set(key, value)
+
 
         # Regenerate smb.conf with new global settings if needed
         if any(k in kwargs for k in ['server_name', 'workgroup', 'macos_optimized']):
@@ -353,6 +357,19 @@ class SmbZfsManager:
             self._system.reload_samba()
             
         return "Global setup modified successfully."
+
+    def modify_home(self, username, quota):
+        self._check_initialized()
+        user_info = self._state.get_item("users", username)
+        if not user_info:
+            raise SmbZfsError(f"User '{username}' is not managed by this tool.")
+
+        home_dataset = user_info.get("home_dataset")
+        if not home_dataset:
+            raise SmbZfsError(f"Home dataset not found for user '{username}'.")
+            
+        self._zfs.set_quota(home_dataset, quota)
+        return f"Quota for user '{username}' has been set to {quota}."
 
     def change_password(self, username, new_password):
         self._check_initialized()

@@ -169,7 +169,7 @@ def cmd_modify_group(manager, args):
         if remove_users:
             print(f"  - Remove users: {', '.join(remove_users)}")
         return
-    
+
     check_root()
     result = manager.modify_group(args.group, add_users, remove_users)
     print(result)
@@ -238,6 +238,18 @@ def cmd_modify_setup(manager, args):
     result = manager.modify_setup(**kwargs)
     print(result)
 
+@handle_exception
+def cmd_modify_home(manager, args):
+    """Handler for the 'modify home' command."""
+    if args.dry_run:
+        print("--- Dry Run ---")
+        print(f"Would modify home for user '{args.user}':")
+        print(f"  - Set ZFS quota to: {args.quota}")
+        return
+
+    check_root()
+    result = manager.modify_home(args.user, args.quota)
+    print(result)
 
 @handle_exception
 def cmd_delete_user(manager, args):
@@ -367,7 +379,7 @@ def main():
         dest="command", required=True, help="Available commands"
     )
 
-    
+
     p_setup = subparsers.add_parser(
         "setup", help="Initial setup of Samba, ZFS, and Avahi."
     )
@@ -393,7 +405,7 @@ def main():
     )
     p_setup.set_defaults(func=cmd_setup)
 
-    
+
     p_create = subparsers.add_parser(
         "create", help="Create a new user, share, or group."
     )
@@ -515,7 +527,12 @@ def main():
     p_modify_setup.add_argument('--dry-run', action='store_true', help="Don't change anything just summarize the changes")
     p_modify_setup.set_defaults(func=cmd_modify_setup)
 
-    
+    p_modify_home = modify_sub.add_parser("home", help="Modify a user's home quota.")
+    p_modify_home.add_argument("user", help="The user to modify.")
+    p_modify_home.add_argument("--quota", required=True, help="The new quota for the home directory (e.g., 20G). Use 'none' to remove.")
+    p_modify_home.add_argument('--dry-run', action='store_true', help="Don't change anything just summarize the changes")
+    p_modify_home.set_defaults(func=cmd_modify_home)
+
     p_delete = subparsers.add_parser("delete", help="Remove a user, share, or group.")
     delete_sub = p_delete.add_subparsers(dest="delete_type", required=True)
 
@@ -566,19 +583,19 @@ def main():
     )
     p_delete_group.set_defaults(func=cmd_delete_group)
 
-    
+
     p_list = subparsers.add_parser("list", help="List all items of a specific type.")
     p_list.add_argument(
         "type", choices=["users", "shares", "groups"], help="The type of item to list."
     )
     p_list.set_defaults(func=cmd_list)
 
-    
+
     p_passwd = subparsers.add_parser("passwd", help="Change a user's password.")
     p_passwd.add_argument("user", help="The user whose password to change.")
     p_passwd.set_defaults(func=cmd_passwd)
 
-    
+
     p_remove = subparsers.add_parser(
         "remove", help="Remove all configurations and data."
     )

@@ -74,7 +74,7 @@ def _list_and_prompt(manager, item_type, prompt_message, allow_empty=False):
              print(f"Note: Cannot list {item_type} as system is not yet set up.")
         else:
             raise e
-    
+
     return prompt(prompt_message)
 
 
@@ -86,11 +86,11 @@ def wizard_setup(manager, args=None):
             print("Available ZFS pools:", ", ".join(available_pools))
         else:
             print("Warning: No ZFS pools found.")
-        
+
         pool = prompt("Enter the name of the ZFS pool to use")
         if not pool:
             raise ValueError("Pool name cannot be empty.")
-        
+
         server_name = prompt(
             "Enter the server's NetBIOS name", default=socket.gethostname()
         )
@@ -149,7 +149,7 @@ def wizard_create_share(manager, args=None):
         comment = prompt("Enter a comment for the share (optional)")
         owner = _list_and_prompt(manager, "users", "Enter the owner for the share's files (default: root)", allow_empty=True) or 'root'
         group = _list_and_prompt(manager, "groups", "Enter the group for the share's files (default: smb_users)", allow_empty=True) or 'smb_users'
-        
+
         perms = prompt(
             "Enter file system permissions for the share root", default="0775"
         )
@@ -203,7 +203,7 @@ def wizard_modify_group(manager, args=None):
 
         add_users_str = _list_and_prompt(manager, "users", "Enter comma-separated users to ADD (optional)", allow_empty=True)
         add_users = [u.strip() for u in add_users_str.split(',')] if add_users_str else None
-        
+
         remove_users_str = _list_and_prompt(manager, "users", "Enter comma-separated users to REMOVE (optional)", allow_empty=True)
         remove_users = [u.strip() for u in remove_users_str.split(',')] if remove_users_str else None
 
@@ -237,7 +237,7 @@ def wizard_modify_share(manager, args=None):
         kwargs['read_only'] = prompt_yes_no("Read-only?", 'y' if share_info.get('read_only') else 'n')
         kwargs['browseable'] = prompt_yes_no("Browseable?", 'y' if share_info.get('browseable') else 'n')
         kwargs['quota'] = prompt("Quota (e.g., 200G or 'none')", default=share_info.get('quota'))
-        
+
         result = manager.modify_share(share_name, **kwargs)
         print(f"\nSuccess: {result}")
 
@@ -248,7 +248,7 @@ def wizard_modify_setup(manager, args=None):
     print("\n--- Modify Global Setup Wizard ---")
     try:
         print("Enter new values or press Enter to keep the current value.")
-        
+
         current_state = {
             'server_name': manager._state.get('server_name'),
             'workgroup': manager._state.get('workgroup'),
@@ -278,6 +278,27 @@ def wizard_modify_setup(manager, args=None):
             return
 
         result = manager.modify_setup(**kwargs)
+        print(f"\nSuccess: {result}")
+
+    except (SmbZfsError, ValueError) as e:
+        print(f"\nError: {e}", file=sys.stderr)
+
+def wizard_modify_home(manager, args=None):
+    print("\n--- Modify Home Quota Wizard ---")
+    try:
+        username = _list_and_prompt(manager, "users", "Enter the user whose home you want to modify")
+        if not username: return
+
+        user_info = manager.list_items("users").get(username, {})
+        home_dataset = user_info.get('home_dataset')
+
+        if not home_dataset:
+            raise SmbZfsError(f"Could not find home dataset for user '{username}'.")
+
+        current_quota = manager._zfs.get_quota(home_dataset)
+        new_quota = prompt(f"Enter new quota for {username}'s home (e.g., 25G or 'none')", default=current_quota)
+
+        result = manager.modify_home(username, new_quota)
         print(f"\nSuccess: {result}")
 
     except (SmbZfsError, ValueError) as e:
@@ -392,6 +413,8 @@ def main():
     p_modify_share.set_defaults(func=wizard_modify_share)
     p_modify_setup = modify_sub.add_parser("setup", help="Start the modify global setup wizard.")
     p_modify_setup.set_defaults(func=wizard_modify_setup)
+    p_modify_home = modify_sub.add_parser("home", help="Start the modify home wizard.")
+    p_modify_home.set_defaults(func=wizard_modify_home)
 
     p_delete = subparsers.add_parser("delete", help="Start a deletion wizard.")
     delete_sub = p_delete.add_subparsers(dest="delete_type", required=True)
