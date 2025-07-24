@@ -54,14 +54,14 @@ def cmd_setup(manager, args):
         print("  - Check for required binaries: zfs, samba, smbpasswd, avahi-daemon")
         print(f"  - Create ZFS dataset: {args.pool}/homes")
         print("  - Create system group: smb_users")
-        print(f"  - Generate {manager._config.SMB_CONF} with:")
+        print(f"  - Generate {SMB_CONF} with:")
         print(f"    - Pool: {args.pool}")
         print(f"    - Server Name: {server_name}")
         print(f"    - Workgroup: {workgroup}")
         print(f"    - macOS optimized: {args.macos}")
         if args.default_home_quota:
             print(f"    - Default Home Quota: {args.default_home_quota}")
-        print(f"  - Generate {manager._config.AVAHI_SMB_SERVICE}")
+        print(f"  - Generate {AVAHI_SMB_SERVICE}")
         print("  - Enable and start smbd, nmbd, avahi-daemon services")
         print(f"  - Initialize state file at {manager._state.path}")
         return
@@ -114,7 +114,7 @@ def cmd_create_share(manager, args):
         print(
             f"  - Set ownership to {args.owner}:{args.group} and permissions to {args.perms}"
         )
-        print(f"  - Add share '{args.share}' to {manager._config.SMB_CONF}")
+        print(f"  - Add share '{args.share}' to {SMB_CONF}")
         print("  - Reload Samba configuration")
         print("  - Update state file")
         return
@@ -284,7 +284,7 @@ def cmd_delete_share(manager, args):
     if args.dry_run:
         print("--- Dry Run ---")
         print("Would perform the following actions:")
-        print(f"  - Remove share '{args.share}' from {manager._config.SMB_CONF}")
+        print(f"  - Remove share '{args.share}' from {SMB_CONF}")
         if args.delete_data:
             print(
                 f"  - DESTROY ZFS dataset: {manager._state.get_item('shares', args.share)['dataset']}"
@@ -416,7 +416,7 @@ def main():
 
 
     p_setup = subparsers.add_parser(
-        "setup", help="Initial setup of Samba, ZFS, and Avahi."
+        "setup", help="Set up and configure Samba, ZFS, and Avahi."
     )
     p_setup.add_argument(
         "--pool", required=True, help="The name of the ZFS pool to use."
@@ -568,7 +568,7 @@ def main():
     p_modify_home.add_argument('--dry-run', action='store_true', help="Don't change anything just summarize the changes")
     p_modify_home.set_defaults(func=cmd_modify_home)
 
-    p_delete = subparsers.add_parser("delete", help="Remove a user, share, or group.")
+    p_delete = subparsers.add_parser("delete", help="Delete a user, share, or group.")
     delete_sub = p_delete.add_subparsers(dest="delete_type", required=True)
 
     p_delete_user = delete_sub.add_parser("user", help="Delete a user.")
@@ -619,20 +619,20 @@ def main():
     p_delete_group.set_defaults(func=cmd_delete_group)
 
 
-    p_list = subparsers.add_parser("list", help="List all items of a specific type.")
+    p_list = subparsers.add_parser("list", help="List all managed users, shares, or groups.")
     p_list.add_argument(
         "type", choices=["users", "shares", "groups"], help="The type of item to list."
     )
     p_list.set_defaults(func=cmd_list)
 
 
-    p_passwd = subparsers.add_parser("passwd", help="Change a user's password.")
+    p_passwd = subparsers.add_parser("passwd", help="Change a user's Samba password.")
     p_passwd.add_argument("user", help="The user whose password to change.")
     p_passwd.set_defaults(func=cmd_passwd)
 
 
     p_remove = subparsers.add_parser(
-        "remove", help="Remove all configurations and data."
+        "remove", help="Uninstall smb-zfs and remove all related configurations and data."
     )
     p_remove.add_argument(
         "--delete-data",

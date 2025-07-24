@@ -393,10 +393,10 @@ def main():
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
     subparsers.required = True
 
-    p_setup = subparsers.add_parser("setup", help="Start the initial setup wizard.")
+    p_setup = subparsers.add_parser("setup", help="Start the wizard to set up and configure Samba, ZFS, and Avahi.")
     p_setup.set_defaults(func=wizard_setup)
 
-    p_create = subparsers.add_parser("create", help="Start a creation wizard.")
+    p_create = subparsers.add_parser("create", help="Start the wizard to create a new user, share, or group.")
     create_sub = p_create.add_subparsers(dest="create_type", required=True)
     p_create_user = create_sub.add_parser("user", help="Start the new user wizard.")
     p_create_user.set_defaults(func=wizard_create_user)
@@ -405,7 +405,7 @@ def main():
     p_create_group = create_sub.add_parser("group", help="Start the new group wizard.")
     p_create_group.set_defaults(func=wizard_create_group)
 
-    p_modify = subparsers.add_parser("modify", help="Start a modification wizard.")
+    p_modify = subparsers.add_parser("modify", help="Start the wizard to modify an existing user, share, or group.")
     modify_sub = p_modify.add_subparsers(dest="modify_type", required=True)
     p_modify_group = modify_sub.add_parser("group", help="Start the modify group wizard.")
     p_modify_group.set_defaults(func=wizard_modify_group)
@@ -416,7 +416,7 @@ def main():
     p_modify_home = modify_sub.add_parser("home", help="Start the modify home wizard.")
     p_modify_home.set_defaults(func=wizard_modify_home)
 
-    p_delete = subparsers.add_parser("delete", help="Start a deletion wizard.")
+    p_delete = subparsers.add_parser("delete", help="Start the wizard to delete a user, share, or group.")
     delete_sub = p_delete.add_subparsers(dest="delete_type", required=True)
     p_delete_user = delete_sub.add_parser("user", help="Start the delete user wizard.")
     p_delete_user.set_defaults(func=wizard_delete_user)
@@ -430,7 +430,7 @@ def main():
     p_delete_group.set_defaults(func=wizard_delete_group)
 
     p_remove = subparsers.add_parser(
-        "remove", help="Start the removal wizard."
+        "remove", help="Start the wizard to uninstall smb-zfs."
     )
     p_remove.set_defaults(func=wizard_remove)
 
