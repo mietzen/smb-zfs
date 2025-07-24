@@ -33,8 +33,38 @@ class SmbZfsManager:
         self._config = ConfigGenerator()
 
     def _check_initialized(self):
+        """Ensures the system has been initialized."""
         if not self._state.is_initialized():
             raise NotInitializedError()
+
+    def _validate_name(self, name, item_type):
+        """
+        Validates that a name adheres to the specific rules for its type.
+        """
+        item_type_lower = item_type.lower()
+
+        if item_type_lower in ["user", "group", "owner"]:
+            # POSIX username/group validation: lowercase, start with letter/underscore,
+            # can contain letters, numbers, underscore, hyphen. Max 32 chars.
+            if not re.match(r"^[a-z_][a-z0-9_-]{0,31}$", name):
+                raise InvalidNameError(
+                    f"{item_type.capitalize()} name '{name}' is invalid. It must be all lowercase, "
+                    "start with a letter or underscore, contain only letters, numbers, "
+                    "underscores, or hyphens, and be max 32 characters."
+                )
+        elif item_type_lower == "share":
+            # Samba share name validation: Alphanumeric, period, underscore, hyphen.
+            # Max 80 chars.
+            if not re.match(r"^[a-zA-Z0-9._-]{1,80}$", name):
+                raise InvalidNameError(
+                    f"Share name '{name}' is invalid. It can only contain letters, "
+                    "numbers, periods, underscores, or hyphens, and be 1-80 characters."
+                )
+        else:
+            if not re.match(r"^[a-zA-Z0-9._-]+$", name):
+                raise InvalidNameError(
+                    f"{item_type.capitalize()} name '{name}' contains invalid characters."
+                )
 
     def setup(self, pool, server_name, workgroup, macos_optimized=False, default_home_quota=None):
         if self._state.is_initialized():
@@ -81,6 +111,7 @@ class SmbZfsManager:
 
     def create_user(self, username, password, allow_shell=False, groups=None):
         self._check_initialized()
+        self._validate_name(username, "user")
         if self._state.get_item("users", username):
             raise ItemExistsError("user", username)
         if self._system.user_exists(username):
@@ -153,14 +184,11 @@ class SmbZfsManager:
 
     def create_group(self, groupname, description="", members=None):
         self._check_initialized()
-        if not re.match(r"^[a-zA-Z0-9._-]+$", groupname):
-            raise InvalidNameError("Group name contains invalid characters.")
+        self._validate_name(groupname, "group")
         if self._state.get_item("groups", groupname):
             raise ItemExistsError("group", groupname)
         if self._system.group_exists(groupname):
             raise ItemExistsError("system group", groupname)
-
-        self._system.add_system_group(groupname)
 
         added_members = []
         if members:
@@ -168,6 +196,10 @@ class SmbZfsManager:
                 if self._state.get_item("users", user):
                     self._system.add_user_to_group(user, groupname)
                     added_members.append(user)
+                else:
+                    raise ItemNotFoundError("users", user)
+
+        self._system.add_system_group(groupname)
 
         group_config = {
             "description": description or f"{groupname} Group",
@@ -204,8 +236,15 @@ class SmbZfsManager:
         quota=None,
     ):
         self._check_initialized()
+        self._validate_name(name, "share")
         if self._state.get_item("shares", name):
             raise ItemExistsError("share", name)
+
+        if not self._state.get_item("users", owner) or owner == 'root':
+            raise ItemNotFoundError("user", owner)
+
+        if not self._state.get_item("users", group) or group == 'root':
+            raise ItemNotFoundError("user", group)
 
         pool = self._state.get("zfs_pool")
         full_dataset = f"{pool}/{dataset_path}"
@@ -219,6 +258,15 @@ class SmbZfsManager:
         gid = grp.getgrnam(group).gr_gid
         os.chown(mount_point, uid, gid)
         os.chmod(mount_point, int(perms, 8))
+
+        if valid_users:
+            for item in valid_users.split(','):
+                if '@' in item:
+                    if not self._state.get_item("group", item[1:]):
+                        raise ItemNotFoundError("group", item[1:])
+                else:
+                    if not self._state.get_item("user", item):
+                        raise ItemNotFoundError("user", item)
 
         share_data = {
             "dataset": {
@@ -273,13 +321,14 @@ class SmbZfsManager:
         if add_users:
             for user in add_users:
                 if not self._state.get_item("users", user):
-                    print(f"Warning: User '{user}' not managed by this tool. Skipping.")
-                    continue
+                    raise ItemNotFoundError("user", user)
                 self._system.add_user_to_group(user, groupname)
                 current_members.add(user)
 
         if remove_users:
             for user in remove_users:
+                if not self._state.get_item("users", user):
+                    raise ItemNotFoundError("user", user)
                 self._system.remove_user_from_group(user, groupname)
                 current_members.discard(user)
 
@@ -305,9 +354,13 @@ class SmbZfsManager:
         # Handle system-level changes (owner, group, perms)
         system_changed = False
         if 'owner' in kwargs and kwargs['owner'] is not None:
+            if not self._state.get_item("user", kwargs['owner']) and not kwargs['owner'] == 'root':
+                raise ItemNotFoundError("user", kwargs['owner'])
             share_info['system']['owner'] = kwargs['owner']
             system_changed = True
         if 'group' in kwargs and kwargs['group'] is not None:
+            if not self._state.get_item("group", kwargs['group']) and not kwargs['group'] == 'root':
+                raise ItemNotFoundError("group", kwargs['group'])
             share_info['system']['group'] = kwargs['group']
             system_changed = True
         if 'perms' in kwargs and kwargs['perms'] is not None:
@@ -327,6 +380,13 @@ class SmbZfsManager:
             share_info['smb_config']['comment'] = kwargs['comment']
             samba_config_changed = True
         if 'valid_users' in kwargs and kwargs['valid_users'] is not None:
+            for item in kwargs['valid_users'].split(','):
+                if '@' in item:
+                    if not self._state.get_item("group", item[1:]):
+                        raise ItemNotFoundError("group", item[1:])
+                else:
+                    if not self._state.get_item("user", item):
+                        raise ItemNotFoundError("user", item)
             share_info['smb_config']['valid_users'] = kwargs['valid_users']
             samba_config_changed = True
         if 'readonly' in kwargs and kwargs['readonly'] is not None:
