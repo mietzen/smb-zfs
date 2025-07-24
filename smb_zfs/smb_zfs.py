@@ -2,6 +2,9 @@ import grp
 import os
 import pwd
 import re
+import sys
+import json
+from contextlib import contextmanager
 from datetime import datetime
 
 from . import (
@@ -31,6 +34,40 @@ class SmbZfsManager:
         self._zfs = Zfs(self._system)
         self._state = StateManager(state_path)
         self._config = ConfigGenerator()
+
+    @contextmanager
+    def _transaction(self):
+        """
+        A context manager to handle atomic operations. It ensures that if any
+        step within the 'with' block fails, all completed steps are rolled back.
+        It specifically handles reverting the state file to its pre-transaction
+        condition. Other rollbacks (like filesystem or system changes) must be
+        added manually to the rollback list.
+        """
+        rollback_actions = []
+        original_state_data = json.loads(json.dumps(self._state.data))  # Deep copy
+
+        try:
+            yield rollback_actions
+        except Exception as e:
+            print(f"Error: An operation failed: {e}", file=sys.stderr)
+            print("Attempting to roll back changes...", file=sys.stderr)
+
+            for action in reversed(rollback_actions):
+                try:
+                    action()
+                except Exception as rollback_e:
+                    print(
+                        f"  - Rollback action failed: {rollback_e}", file=sys.stderr
+                    )
+
+            # After attempting rollbacks, restore the state file to its original content
+            self._state.data = original_state_data
+            self._state.save()
+            print("System state has been restored.", file=sys.stderr)
+
+            # Re-raise the original exception so the caller knows the operation failed
+            raise e
 
     def _check_initialized(self):
         """Ensures the system has been initialized."""
@@ -120,50 +157,66 @@ class SmbZfsManager:
         pool = self._state.get("zfs_pool")
         home_dataset_name = f"{pool}/homes/{username}"
 
-        self._zfs.create_dataset(home_dataset_name)
-        home_mountpoint = self._zfs.get_mountpoint(home_dataset_name)
+        with self._transaction() as rollback:
+            # Action: Create ZFS dataset
+            self._zfs.create_dataset(home_dataset_name)
+            rollback.append(lambda: self._zfs.destroy_dataset(home_dataset_name))
 
-        default_home_quota = self._state.get("default_home_quota")
-        if default_home_quota:
-            self._zfs.set_quota(home_dataset_name, default_home_quota)
+            home_mountpoint = self._zfs.get_mountpoint(home_dataset_name)
 
-        self._system.add_system_user(
-            username,
-            home_dir=home_mountpoint if allow_shell else None,
-            shell="/bin/bash" if allow_shell else "/usr/sbin/nologin",
-        )
+            # Action: Set quota
+            default_home_quota = self._state.get("default_home_quota")
+            if default_home_quota:
+                self._zfs.set_quota(home_dataset_name, default_home_quota)
 
-        os.chown(
-            home_mountpoint,
-            pwd.getpwnam(username).pw_uid,
-            pwd.getpwnam(username).pw_gid,
-        )
-        os.chmod(home_mountpoint, 0o700)
+            # Action: Add system user
+            self._system.add_system_user(
+                username,
+                home_dir=home_mountpoint if allow_shell else None,
+                shell="/bin/bash" if allow_shell else "/usr/sbin/nologin",
+            )
+            rollback.append(lambda: self._system.delete_system_user(username))
 
-        if allow_shell:
-            self._system.set_system_password(username, password)
+            # Actions: chown and chmod for home directory
+            os.chown(
+                home_mountpoint,
+                pwd.getpwnam(username).pw_uid,
+                pwd.getpwnam(username).pw_gid,
+            )
+            os.chmod(home_mountpoint, 0o700)
 
-        self._system.add_samba_user(username, password)
-        self._system.add_user_to_group(username, "smb_users")
+            # Action: Set system password if shell is allowed
+            if allow_shell:
+                self._system.set_system_password(username, password)
 
-        user_groups = []
-        if groups:
-            for group in groups:
-                if self._state.get_item("groups", group):
-                    self._system.add_user_to_group(username, group)
-                    user_groups.append(group)
+            # Action: Add Samba user
+            self._system.add_samba_user(username, password)
+            rollback.append(lambda: self._system.delete_samba_user(username))
 
-        user_data = {
-            "shell_access": allow_shell,
-            "dataset": {
-                "name": home_dataset_name,
-                "mount_point": home_mountpoint,
-                "quota": default_home_quota,
-            },
-            "groups": user_groups,
-            "created": datetime.utcnow().isoformat(),
-        }
-        self._state.set_item("users", username, user_data)
+            # Action: Add user to groups
+            self._system.add_user_to_group(username, "smb_users")
+            user_groups = []
+            if groups:
+                for group in groups:
+                    if self._state.get_item("groups", group):
+                        self._system.add_user_to_group(username, group)
+                        user_groups.append(group)
+                    else:
+                        raise ItemNotFoundError("group", group)
+
+            # Action: Update state file (handled by transaction manager)
+            user_data = {
+                "shell_access": allow_shell,
+                "dataset": {
+                    "name": home_dataset_name,
+                    "mount_point": home_mountpoint,
+                    "quota": default_home_quota,
+                },
+                "groups": user_groups,
+                "created": datetime.utcnow().isoformat(),
+            }
+            self._state.set_item("users", username, user_data)
+
         return f"User '{username}' created successfully."
 
     def delete_user(self, username, delete_data=False):
@@ -190,23 +243,28 @@ class SmbZfsManager:
         if self._system.group_exists(groupname):
             raise ItemExistsError("system group", groupname)
 
-        added_members = []
-        if members:
-            for user in members:
-                if self._state.get_item("users", user):
+        with self._transaction() as rollback:
+            # Action: Create system group
+            self._system.add_system_group(groupname)
+            rollback.append(lambda: self._system.delete_system_group(groupname))
+
+            # Action: Add members to the new group
+            added_members = []
+            if members:
+                for user in members:
+                    if not self._state.get_item("users", user):
+                        raise ItemNotFoundError("user", user)
                     self._system.add_user_to_group(user, groupname)
                     added_members.append(user)
-                else:
-                    raise ItemNotFoundError("users", user)
 
-        self._system.add_system_group(groupname)
+            # Action: Update state file
+            group_config = {
+                "description": description or f"{groupname} Group",
+                "members": added_members,
+                "created": datetime.utcnow().isoformat(),
+            }
+            self._state.set_item("groups", groupname, group_config)
 
-        group_config = {
-            "description": description or f"{groupname} Group",
-            "members": added_members,
-            "created": datetime.utcnow().isoformat(),
-        }
-        self._state.set_item("groups", groupname, group_config)
         return f"Group '{groupname}' created successfully."
 
     def delete_group(self, groupname):
@@ -240,59 +298,74 @@ class SmbZfsManager:
         if self._state.get_item("shares", name):
             raise ItemExistsError("share", name)
 
-        if not self._state.get_item("users", owner) or owner == 'root':
+        if not self._system.user_exists(owner):
             raise ItemNotFoundError("user", owner)
 
-        if not self._state.get_item("users", group) or group == 'root':
-            raise ItemNotFoundError("user", group)
+        if not self._system.group_exists(group):
+            raise ItemNotFoundError("group", group)
 
         pool = self._state.get("zfs_pool")
         full_dataset = f"{pool}/{dataset_path}"
 
-        self._zfs.create_dataset(full_dataset)
-        if quota:
-            self._zfs.set_quota(full_dataset, quota)
-        mount_point = self._zfs.get_mountpoint(full_dataset)
+        with self._transaction() as rollback:
+            # Action: Create ZFS dataset
+            self._zfs.create_dataset(full_dataset)
+            rollback.append(lambda: self._zfs.destroy_dataset(full_dataset))
 
-        uid = pwd.getpwnam(owner).pw_uid
-        gid = grp.getgrnam(group).gr_gid
-        os.chown(mount_point, uid, gid)
-        os.chmod(mount_point, int(perms, 8))
+            if quota:
+                self._zfs.set_quota(full_dataset, quota)
+            mount_point = self._zfs.get_mountpoint(full_dataset)
 
-        if valid_users:
-            for item in valid_users.split(','):
-                if '@' in item:
-                    if not self._state.get_item("group", item[1:]):
-                        raise ItemNotFoundError("group", item[1:])
-                else:
-                    if not self._state.get_item("user", item):
-                        raise ItemNotFoundError("user", item)
+            # Action: Set ownership and permissions
+            uid = pwd.getpwnam(owner).pw_uid
+            gid = grp.getgrnam(group).gr_gid
+            os.chown(mount_point, uid, gid)
+            os.chmod(mount_point, int(perms, 8))
 
-        share_data = {
-            "dataset": {
-                "name": full_dataset,
-                "mount_point": mount_point,
-                "quota": quota,
-            },
-            "smb_config": {
-                "comment": comment,
-                "browseable": browseable,
-                "read_only": read_only,
-                "valid_users": valid_users or f"@{group}",
-            },
-            "system": {
-                "owner": owner,
-                "group": group,
-                "permissions": perms,
-            },
-            "created": datetime.utcnow().isoformat(),
-        }
+            if valid_users:
+                for item in valid_users.replace(" ", "").split(','):
+                    item_name = item.lstrip('@')
+                    if '@' in item:
+                        if not self._system.group_exists(item_name):
+                            raise ItemNotFoundError("group", item_name)
+                    else:
+                        if not self._system.user_exists(item_name):
+                            raise ItemNotFoundError("user", item_name)
 
-        self._config.add_share_to_conf(name, share_data)
-        self._system.test_samba_config()
-        self._system.reload_samba()
+            share_data = {
+                "dataset": {
+                    "name": full_dataset,
+                    "mount_point": mount_point,
+                    "quota": quota,
+                },
+                "smb_config": {
+                    "comment": comment,
+                    "browseable": browseable,
+                    "read_only": read_only,
+                    "valid_users": valid_users or f"@{group}",
+                },
+                "system": {
+                    "owner": owner,
+                    "group": group,
+                    "permissions": perms,
+                },
+                "created": datetime.utcnow().isoformat(),
+            }
 
-        self._state.set_item("shares", name, share_data)
+            # Action: Modify Samba config and reload
+            self._config.add_share_to_conf(name, share_data)
+            def samba_rollback():
+                self._config.remove_share_from_conf(name)
+                self._system.test_samba_config()
+                self._system.reload_samba()
+            rollback.append(samba_rollback)
+
+            self._system.test_samba_config()
+            self._system.reload_samba()
+
+            # Action: Update state file
+            self._state.set_item("shares", name, share_data)
+
         return f"Share '{name}' created successfully."
 
     def delete_share(self, name, delete_data=False):
@@ -328,9 +401,13 @@ class SmbZfsManager:
         if remove_users:
             for user in remove_users:
                 if not self._state.get_item("users", user):
+                    # Check if user is actually in the group before trying to remove
+                    if user in current_members:
+                        self._system.remove_user_from_group(user, groupname)
+                        current_members.discard(user)
+                else:
                     raise ItemNotFoundError("user", user)
-                self._system.remove_user_from_group(user, groupname)
-                current_members.discard(user)
+
 
         group_info["members"] = sorted(list(current_members))
         self._state.set_item("groups", groupname, group_info)
@@ -342,84 +419,81 @@ class SmbZfsManager:
         if not share_info:
             raise ItemNotFoundError("share", share_name)
 
-        # Flag to track if smb.conf needs a reload
         samba_config_changed = False
+        original_share_info = json.loads(json.dumps(share_info))
 
-        # Handle quota change
-        if 'quota' in kwargs and kwargs['quota'] is not None:
-            new_quota = kwargs['quota'] if kwargs['quota'].lower() != 'none' else None
-            share_info['dataset']['quota'] = new_quota
-            self._zfs.set_quota(share_info["dataset"]["name"], new_quota)
+        try:
+            if 'quota' in kwargs and kwargs['quota'] is not None:
+                new_quota = kwargs['quota'] if kwargs['quota'].lower() != 'none' else None
+                share_info['dataset']['quota'] = new_quota
+                self._zfs.set_quota(share_info["dataset"]["name"], new_quota)
 
-        # Handle system-level changes (owner, group, perms)
-        system_changed = False
-        if 'owner' in kwargs and kwargs['owner'] is not None:
-            if not self._state.get_item("user", kwargs['owner']) and not kwargs['owner'] == 'root':
-                raise ItemNotFoundError("user", kwargs['owner'])
-            share_info['system']['owner'] = kwargs['owner']
-            system_changed = True
-        if 'group' in kwargs and kwargs['group'] is not None:
-            if not self._state.get_item("group", kwargs['group']) and not kwargs['group'] == 'root':
-                raise ItemNotFoundError("group", kwargs['group'])
-            share_info['system']['group'] = kwargs['group']
-            system_changed = True
-        if 'perms' in kwargs and kwargs['perms'] is not None:
-            share_info['system']['permissions'] = kwargs['perms']
-            system_changed = True
+            system_changed = False
+            if 'owner' in kwargs and kwargs['owner'] is not None:
+                if not self._system.user_exists(kwargs['owner']):
+                    raise ItemNotFoundError("user", kwargs['owner'])
+                share_info['system']['owner'] = kwargs['owner']
+                system_changed = True
+            if 'group' in kwargs and kwargs['group'] is not None:
+                if not self._system.group_exists(kwargs['group']):
+                    raise ItemNotFoundError("group", kwargs['group'])
+                share_info['system']['group'] = kwargs['group']
+                system_changed = True
+            if 'perms' in kwargs and kwargs['perms'] is not None:
+                share_info['system']['permissions'] = kwargs['perms']
+                system_changed = True
 
-        if system_changed:
-            mount_point = share_info['dataset']['mount_point']
-            uid = pwd.getpwnam(share_info['system']['owner']).pw_uid
-            gid = grp.getgrnam(share_info['system']['group']).gr_gid
-            os.chown(mount_point, uid, gid)
-            os.chmod(mount_point, int(share_info['system']['permissions'], 8))
-            samba_config_changed = True # force user/group is in smb.conf
+            if system_changed:
+                mount_point = share_info['dataset']['mount_point']
+                uid = pwd.getpwnam(share_info['system']['owner']).pw_uid
+                gid = grp.getgrnam(share_info['system']['group']).gr_gid
+                os.chown(mount_point, uid, gid)
+                os.chmod(mount_point, int(share_info['system']['permissions'], 8))
+                samba_config_changed = True
 
-        # Handle Samba-specific config changes
-        if 'comment' in kwargs and kwargs['comment'] is not None:
-            share_info['smb_config']['comment'] = kwargs['comment']
-            samba_config_changed = True
-        if 'valid_users' in kwargs and kwargs['valid_users'] is not None:
-            for item in kwargs['valid_users'].split(','):
-                if '@' in item:
-                    if not self._state.get_item("group", item[1:]):
-                        raise ItemNotFoundError("group", item[1:])
-                else:
-                    if not self._state.get_item("user", item):
-                        raise ItemNotFoundError("user", item)
-            share_info['smb_config']['valid_users'] = kwargs['valid_users']
-            samba_config_changed = True
-        if 'readonly' in kwargs and kwargs['readonly'] is not None:
-            share_info['smb_config']['read_only'] = kwargs['readonly']
-            samba_config_changed = True
-        if 'no_browse' in kwargs and kwargs['no_browse'] is not None:
-            share_info['smb_config']['browseable'] = not kwargs['no_browse']
-            samba_config_changed = True
+            if 'comment' in kwargs and kwargs['comment'] is not None:
+                share_info['smb_config']['comment'] = kwargs['comment']
+                samba_config_changed = True
+            if 'valid_users' in kwargs and kwargs['valid_users'] is not None:
+                for item in kwargs['valid_users'].replace(" ", "").split(','):
+                    item_name = item.lstrip('@')
+                    if '@' in item:
+                        if not self._system.group_exists(item_name):
+                            raise ItemNotFoundError("group", item_name)
+                    else:
+                        if not self._system.user_exists(item_name):
+                            raise ItemNotFoundError("user", item_name)
+                share_info['smb_config']['valid_users'] = kwargs['valid_users']
+                samba_config_changed = True
+            if 'read_only' in kwargs and kwargs['read_only'] is not None:
+                share_info['smb_config']['read_only'] = kwargs['read_only']
+                samba_config_changed = True
+            if 'browseable' in kwargs and kwargs['browseable'] is not None:
+                share_info['smb_config']['browseable'] = kwargs['browseable']
+                samba_config_changed = True
 
-        # Save the updated state
-        self._state.set_item("shares", share_name, share_info)
+            self._state.set_item("shares", share_name, share_info)
 
-        # If any samba-related config changed, regenerate the conf entry and reload
-        if samba_config_changed:
-            self._config.remove_share_from_conf(share_name)
-            self._config.add_share_to_conf(share_name, share_info)
-            self._system.test_samba_config()
-            self._system.reload_samba()
+            if samba_config_changed:
+                self._config.remove_share_from_conf(share_name)
+                self._config.add_share_to_conf(share_name, share_info)
+                self._system.test_samba_config()
+                self._system.reload_samba()
+
+        except Exception:
+            # Rollback in-memory and file state on failure
+            self._state.set_item("shares", share_name, original_share_info)
+            # Re-raise the exception
+            raise
 
         return f"Share '{share_name}' modified successfully."
 
     def modify_setup(self, **kwargs):
         self._check_initialized()
 
-        # Update state with any new values.
         for key, value in kwargs.items():
-            if value is None and key == 'default_home_quota':
-                self._state.set(key, None)
-            elif value is not None:
-                self._state.set(key, value)
+            self._state.set(key, value)
 
-
-        # Regenerate smb.conf with new global settings if needed
         if any(k in kwargs for k in ['server_name', 'workgroup', 'macos_optimized']):
             pool = self._state.get("zfs_pool")
             server_name = self._state.get("server_name")
@@ -427,7 +501,6 @@ class SmbZfsManager:
             macos_optimized = self._state.get("macos_optimized")
             self._config.create_smb_conf(pool, server_name, workgroup, macos_optimized)
 
-            # Re-add all existing shares to the new config
             all_shares = self.list_items("shares")
             for share_name, share_info in all_shares.items():
                 self._config.add_share_to_conf(share_name, share_info)
@@ -444,8 +517,9 @@ class SmbZfsManager:
             raise ItemNotFoundError("user", username)
 
         home_dataset = user_info["dataset"]["name"]
-        self._zfs.set_quota(home_dataset, quota)
-        user_info["dataset"]["quota"] = quota
+        new_quota = quota if quota and quota.lower() != 'none' else 'none'
+        self._zfs.set_quota(home_dataset, new_quota)
+        user_info["dataset"]["quota"] = new_quota
         self._state.set_item("users", username, user_info)
         return f"Quota for user '{username}' has been set to {quota}."
 
@@ -468,15 +542,18 @@ class SmbZfsManager:
 
         items = self._state.list_items(category)
 
-        # Update with live data
         if category == "users":
             for name, data in items.items():
                 quota = self._zfs.get_quota(data["dataset"]["name"])
+                if data["dataset"]["quota"] != quota:
+                    print(f"Warning quota in state for user {name} differs from real quota! state: {data["dataset"]["quota"]}, live:{quota}")
                 data["dataset"]["quota"] = quota if quota and quota != 'none' else "Not Set"
 
         if category == "shares":
             for name, data in items.items():
                 quota = self._zfs.get_quota(data["dataset"]["name"])
+                if data["dataset"]["quota"] != quota:
+                    print(f"Warning quota in state for share {name} differs from real quota! state: {data["dataset"]["quota"]}, live:{quota}")
                 data["dataset"]["quota"] = quota if quota and quota != 'none' else "Not Set"
 
         return items
@@ -488,6 +565,7 @@ class SmbZfsManager:
         pool = self._state.get("zfs_pool")
         users = self.list_items("users")
         groups = self.list_items("groups")
+        shares = self.list_items("shares")
 
         if delete_users_and_groups:
             for username in users:
@@ -502,19 +580,22 @@ class SmbZfsManager:
                 self._system.delete_system_group("smb_users")
 
         if delete_data and pool:
-            for user_info in users.values():
-                self._zfs.destroy_dataset(user_info["dataset"]["name"])
-            all_shares = self.list_items("shares")
-            for share_info in all_shares.values():
+            for share_info in shares.values():
                 if "dataset" in share_info:
                     self._zfs.destroy_dataset(share_info["dataset"]["name"])
-            self._zfs.destroy_dataset(f"{pool}/homes")
+            for user_info in users.values():
+                self._zfs.destroy_dataset(user_info["dataset"]["name"])
+            if self._zfs.dataset_exists(f"{pool}/homes"):
+                self._zfs.destroy_dataset(f"{pool}/homes")
 
         self._system.stop_services()
         self._system.disable_services()
 
         for f in [SMB_CONF, AVAHI_SMB_SERVICE, self._state.path]:
             if os.path.exists(f):
-                os.remove(f)
+                try:
+                    os.remove(f)
+                except OSError as e:
+                    print(f"Warning: could not remove file {f}: {e}", file=sys.stderr)
 
         return "Removal completed successfully."
