@@ -11,12 +11,17 @@ class System:
 
     def _run(self, command, input_data=None, check=True):
         try:
+            # Ensure the command is a list of strings
+            if isinstance(command, str):
+                command = command.split()
+
             process = subprocess.run(
                 command,
                 input=input_data,
                 capture_output=True,
                 text=True,
                 check=check,
+                shell=False  # Explicitly disable the shell
             )
             return process
         except FileNotFoundError as e:
