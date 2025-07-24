@@ -6,6 +6,7 @@ import sys
 import json
 from contextlib import contextmanager
 from datetime import datetime
+from functools import wraps
 
 from . import (
     ConfigGenerator,
@@ -26,6 +27,17 @@ from .errors import (
     PrerequisiteError,
     ImmutableError,
 )
+
+
+def requires_initialization(func):
+    """Decorator to ensure the system is initialized before running a method."""
+
+    @wraps(func)
+    def wrapper(self, *args, **kwargs):
+        self._check_initialized()
+        return func(self, *args, **kwargs)
+
+    return wrapper
 
 
 class SmbZfsManager:
@@ -146,8 +158,8 @@ class SmbZfsManager:
         )
         return "Setup completed successfully."
 
+    @requires_initialization
     def create_user(self, username, password, allow_shell=False, groups=None):
-        self._check_initialized()
         self._validate_name(username, "user")
         if self._state.get_item("users", username):
             raise ItemExistsError("user", username)
@@ -219,8 +231,8 @@ class SmbZfsManager:
 
         return f"User '{username}' created successfully."
 
+    @requires_initialization
     def delete_user(self, username, delete_data=False):
-        self._check_initialized()
         user_info = self._state.get_item("users", username)
         if not user_info:
             raise ItemNotFoundError("user", username)
@@ -235,8 +247,8 @@ class SmbZfsManager:
         self._state.delete_item("users", username)
         return f"User '{username}' deleted successfully."
 
+    @requires_initialization
     def create_group(self, groupname, description="", members=None):
-        self._check_initialized()
         self._validate_name(groupname, "group")
         if self._state.get_item("groups", groupname):
             raise ItemExistsError("group", groupname)
@@ -267,8 +279,8 @@ class SmbZfsManager:
 
         return f"Group '{groupname}' created successfully."
 
+    @requires_initialization
     def delete_group(self, groupname):
-        self._check_initialized()
         if not self._state.get_item("groups", groupname):
             raise ItemNotFoundError("group", groupname)
         if groupname == "smb_users":
@@ -280,6 +292,7 @@ class SmbZfsManager:
         self._state.delete_item("groups", groupname)
         return f"Group '{groupname}' deleted successfully."
 
+    @requires_initialization
     def create_share(
         self,
         name,
@@ -293,7 +306,6 @@ class SmbZfsManager:
         browseable=True,
         quota=None,
     ):
-        self._check_initialized()
         self._validate_name(name, "share")
         if self._state.get_item("shares", name):
             raise ItemExistsError("share", name)
@@ -368,8 +380,8 @@ class SmbZfsManager:
 
         return f"Share '{name}' created successfully."
 
+    @requires_initialization
     def delete_share(self, name, delete_data=False):
-        self._check_initialized()
         share_info = self._state.get_item("shares", name)
         if not share_info:
             raise ItemNotFoundError("share", name)
@@ -384,8 +396,8 @@ class SmbZfsManager:
         self._state.delete_item("shares", name)
         return f"Share '{name}' deleted successfully."
 
+    @requires_initialization
     def modify_group(self, groupname, add_users=None, remove_users=None):
-        self._check_initialized()
         group_info = self._state.get_item("groups", groupname)
         if not group_info:
             raise ItemNotFoundError("group", groupname)
@@ -413,8 +425,8 @@ class SmbZfsManager:
         self._state.set_item("groups", groupname, group_info)
         return f"Group '{groupname}' modified successfully."
 
+    @requires_initialization
     def modify_share(self, share_name, **kwargs):
-        self._check_initialized()
         share_info = self._state.get_item("shares", share_name)
         if not share_info:
             raise ItemNotFoundError("share", share_name)
@@ -488,9 +500,8 @@ class SmbZfsManager:
 
         return f"Share '{share_name}' modified successfully."
 
+    @requires_initialization
     def modify_setup(self, **kwargs):
-        self._check_initialized()
-
         for key, value in kwargs.items():
             self._state.set(key, value)
 
@@ -510,8 +521,8 @@ class SmbZfsManager:
 
         return "Global setup modified successfully."
 
+    @requires_initialization
     def modify_home(self, username, quota):
-        self._check_initialized()
         user_info = self._state.get_item("users", username)
         if not user_info:
             raise ItemNotFoundError("user", username)
@@ -523,8 +534,8 @@ class SmbZfsManager:
         self._state.set_item("users", username, user_info)
         return f"Quota for user '{username}' has been set to {quota}."
 
+    @requires_initialization
     def change_password(self, username, new_password):
-        self._check_initialized()
         user_info = self._state.get_item("users", username)
         if not user_info:
             raise ItemNotFoundError("user", username)
@@ -535,8 +546,8 @@ class SmbZfsManager:
         self._system.set_samba_password(username, new_password)
         return f"Password changed successfully for user '{username}'."
 
+    @requires_initialization
     def list_items(self, category):
-        self._check_initialized()
         if category not in ["users", "groups", "shares"]:
             raise SmbZfsError("Invalid category to list.")
 
