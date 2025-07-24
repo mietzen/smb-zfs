@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 
 import argparse
-import getpass
 import socket
 import sys
 from importlib import metadata
-from . import SmbZfsManager, SmbZfsError, CONFIRM_PHRASE, NAME
+from . import SmbZfsManager, SmbZfsError, CONFIRM_PHRASE, NAME, prompt_for_password
 
 
 def prompt(message, default=None):
@@ -29,19 +28,6 @@ def prompt_yes_no(message, default="n"):
         if response in ["n", "no"]:
             return False
         print("Please answer 'yes' or 'no'.")
-
-
-def prompt_for_password(username):
-    """Securely prompts for a password and confirmation."""
-    while True:
-        password = getpass.getpass(f"Enter password for user '{username}': ")
-        if not password:
-            print("Password cannot be empty.", file=sys.stderr)
-            continue
-        password_confirm = getpass.getpass("Confirm password: ")
-        if password == password_confirm:
-            return password
-        print("Passwords do not match. Please try again.", file=sys.stderr)
 
 
 def confirm_destructive_action(message):

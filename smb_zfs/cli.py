@@ -7,7 +7,7 @@ import socket
 import sys
 
 from importlib import metadata
-from . import SmbZfsManager, SmbZfsError, CONFIRM_PHRASE, NAME, SMB_CONF, AVAHI_SMB_SERVICE
+from . import SmbZfsManager, SmbZfsError, CONFIRM_PHRASE, NAME, SMB_CONF, AVAHI_SMB_SERVICE, prompt_for_password
 
 
 def handle_exception(func):
@@ -73,9 +73,7 @@ def cmd_setup(manager, args):
 @handle_exception
 def cmd_create_user(manager, args):
     """Handler for the 'create user' command."""
-    password = args.password or getpass.getpass(
-        f"Enter password for user '{args.user}': "
-    )
+    password = args.password or prompt_for_password(args.user)
     groups = args.groups.split(",") if args.groups else []
 
     if args.dry_run:
@@ -341,12 +339,7 @@ def cmd_list(manager, args):
 @handle_exception
 def cmd_passwd(manager, args):
     """Handler for the 'passwd' command."""
-    password = getpass.getpass(f"Enter new password for user '{args.user}': ")
-    password_confirm = getpass.getpass("Confirm new password: ")
-    if password != password_confirm:
-        print("Passwords do not match.", file=sys.stderr)
-        sys.exit(1)
-
+    password = prompt_for_password(args.user)
     if getpass.getuser() != args.user:
         check_root()
     result = manager.change_password(args.user, password)
@@ -549,7 +542,7 @@ def main():
     p_modify_share.add_argument("--perms", help="New file system permissions (e.g., 770).")
     p_modify_share.add_argument("--valid-users", help="New list of allowed users/groups.")
     p_modify_share.add_argument("--readonly", action=argparse.BooleanOptionalAction, help="Set the share as read-only.")
-    p_modify_share.add_argument("--no-browse", action=argparse.BooleanOptionalAction, help="Hide the share from network browsing.")
+    p_modify_share.add_argument("--no-browse", action=argparse.BooleanOptionalAction, help="Hide the share from network Browse.")
     p_modify_share.add_argument("--quota", help="New ZFS quota for the share (e.g., 200G). Use 'none' to remove.")
     p_modify_share.add_argument('--dry-run', action='store_true', help="Don't change anything just summarize the changes")
     p_modify_share.set_defaults(func=cmd_modify_share)
