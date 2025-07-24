@@ -10,25 +10,7 @@ from importlib import metadata
 from .smb_zfs import SmbZfsManager
 from .errors import SmbZfsError
 from .const import NAME, SMB_CONF, AVAHI_SMB_SERVICE
-from .utils import prompt_for_password, confirm_destructive_action
-
-
-def handle_exception(func):
-    """Decorator to catch and print SmbZfsError exceptions."""
-
-    def wrapper(*args, **kwargs):
-        try:
-            return func(*args, **kwargs)
-        except SmbZfsError as e:
-            print(f"Error: {e}", file=sys.stderr)
-            sys.exit(1)
-
-    return wrapper
-
-
-def check_root():
-    if os.geteuid() != 0:
-        raise SmbZfsError("This script must be run as root.")
+from .utils import prompt_for_password, confirm_destructive_action, handle_exception, check_root
 
 
 @handle_exception

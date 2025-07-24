@@ -1,7 +1,11 @@
 import re
+import os
+import sys
 import getpass
 
 from .const import CONFIRM_PHRASE
+from .errors import SmbZfsError
+
 
 def password_check(password):
     """
@@ -31,15 +35,16 @@ def password_check(password):
     symbol_error = re.search(r"\W", password) is None
 
     # overall result
-    password_ok = not ( length_error or digit_error or uppercase_error or lowercase_error or symbol_error )
+    password_ok = not (
+        length_error or digit_error or uppercase_error or lowercase_error or symbol_error)
 
     return {
-        'password_ok' : password_ok,
-        'length_error' : length_error,
-        'digit_error' : digit_error,
-        'uppercase_error' : uppercase_error,
-        'lowercase_error' : lowercase_error,
-        'symbol_error' : symbol_error,
+        'password_ok': password_ok,
+        'length_error': length_error,
+        'digit_error': digit_error,
+        'uppercase_error': uppercase_error,
+        'lowercase_error': lowercase_error,
+        'symbol_error': symbol_error,
     }
 
 
@@ -59,9 +64,11 @@ def prompt_for_password(username):
             if check['digit_error']:
                 print("- It must contain at least one digit.", file=sys.stderr)
             if check['uppercase_error']:
-                print("- It must contain at least one uppercase letter.", file=sys.stderr)
+                print("- It must contain at least one uppercase letter.",
+                      file=sys.stderr)
             if check['lowercase_error']:
-                print("- It must contain at least one lowercase letter.", file=sys.stderr)
+                print("- It must contain at least one lowercase letter.",
+                      file=sys.stderr)
             if check['symbol_error']:
                 print("- It must contain at least one symbol.", file=sys.stderr)
             continue
@@ -70,6 +77,7 @@ def prompt_for_password(username):
         if password == password_confirm:
             return password
         print("Passwords do not match. Please try again.", file=sys.stderr)
+
 
 def confirm_destructive_action(prompt, yes_flag):
     """Ask for confirmation for a destructive action."""
@@ -82,3 +90,21 @@ def confirm_destructive_action(prompt, yes_flag):
     )
     response = input("> ")
     return response == CONFIRM_PHRASE
+
+
+def handle_exception(func):
+    """Decorator to catch and print SmbZfsError exceptions."""
+
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except SmbZfsError as e:
+            print(f"Error: {e}", file=sys.stderr)
+            sys.exit(1)
+
+    return wrapper
+
+
+def check_root():
+    if os.geteuid() != 0:
+        raise SmbZfsError("This script must be run as root.")
