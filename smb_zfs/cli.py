@@ -7,8 +7,7 @@ import socket
 import sys
 
 from importlib import metadata
-from . import SmbZfsManager, SmbZfsError, CONFIRM_PHRASE, NAME
-
+from . import SmbZfsManager, SmbZfsError, CONFIRM_PHRASE, NAME, SMB_CONF, AVAHI_SMB_SERVICE
 
 
 def handle_exception(func):
@@ -357,6 +356,42 @@ def cmd_passwd(manager, args):
 @handle_exception
 def cmd_remove(manager, args):
     """Handler for the 'remove' command."""
+    if args.dry_run:
+        print("--- Dry Run ---")
+        print("Would perform the following actions:")
+        if not manager._state.is_initialized():
+            print("System is not set up, nothing to do.")
+            return
+
+        users = manager.list_items("users")
+        groups = manager.list_items("groups")
+        shares = manager.list_items("shares")
+
+        if args.delete_users:
+            print("  - Delete all managed users:")
+            for username in users:
+                print(f"    - {username}")
+            print("  - Delete all managed groups:")
+            for groupname in groups:
+                 print(f"    - {groupname}")
+            print("    - smb_users")
+
+
+        if args.delete_data:
+            print("  - DESTROY all managed ZFS datasets:")
+            for share_info in shares.values():
+                print(f"    - {share_info['dataset']['name']}")
+            for user_info in users.values():
+                 print(f"    - {user_info['dataset']['name']}")
+            pool = manager._state.get("zfs_pool")
+            if pool:
+                print(f"    - {pool}/homes")
+
+        print("  - Stop and disable smbd, nmbd, avahi-daemon services.")
+        print(f"  - Remove configuration files: {SMB_CONF}, {AVAHI_SMB_SERVICE}")
+        print(f"  - Remove state file: {manager._state.path}")
+        return
+
     prompt = "This will remove all configurations and potentially all user data and users created by this tool."
     if not confirm_destructive_action(prompt, args.yes):
         print("Operation cancelled.", file=sys.stderr)
@@ -613,6 +648,11 @@ def main():
         "--yes",
         action="store_true",
         help="Assume 'yes' to destructive confirmation prompts.",
+    )
+    p_remove.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Don't change anything just summarize the changes",
     )
     p_remove.set_defaults(func=cmd_remove)
 
