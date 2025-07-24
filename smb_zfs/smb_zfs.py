@@ -387,7 +387,22 @@ class SmbZfsManager:
         self._check_initialized()
         if category not in ["users", "groups", "shares"]:
             raise SmbZfsError("Invalid category to list.")
-        return self._state.list_items(category)
+        
+        items = self._state.list_items(category)
+
+        if category == "users":
+            for name, data in items.items():
+                if "home_dataset" in data:
+                    quota = self._zfs.get_quota(data["home_dataset"])
+                    data["quota"] = quota if quota and quota != 'none' else "Not Set"
+        
+        if category == "shares":
+            for name, data in items.items():
+                if "dataset" in data:
+                    quota = self._zfs.get_quota(data["dataset"])
+                    data["quota"] = quota if quota and quota != 'none' else "Not Set"
+
+        return items
 
     def remove(self, delete_data=False, delete_users_and_groups=False):
         if not self._state.is_initialized():
