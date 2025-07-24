@@ -8,15 +8,11 @@ from contextlib import contextmanager
 from datetime import datetime
 from functools import wraps
 
-from . import (
-    ConfigGenerator,
-    StateManager,
-    System,
-    Zfs,
-    AVAHI_SMB_SERVICE,
-    SMB_CONF,
-    NAME,
-)
+from .config_generator import ConfigGenerator
+from .state_manager import StateManager
+from .system import System
+from .zfs import Zfs
+from .const import AVAHI_SMB_SERVICE, SMB_CONF, NAME
 from .errors import (
     SmbZfsError,
     NotInitializedError,
@@ -28,6 +24,7 @@ from .errors import (
     ImmutableError,
 )
 
+STATE_FILE=f"/var/lib/{NAME}.state"
 
 def requires_initialization(func):
     """Decorator to ensure the system is initialized before running a method."""
@@ -41,7 +38,7 @@ def requires_initialization(func):
 
 
 class SmbZfsManager:
-    def __init__(self, state_path=f"/var/lib/{NAME}.state"):
+    def __init__(self, state_path=STATE_FILE):
         self._system = System()
         self._zfs = Zfs(self._system)
         self._state = StateManager(state_path)

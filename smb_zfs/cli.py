@@ -5,10 +5,12 @@ import getpass
 import os
 import socket
 import sys
-
 from importlib import metadata
-from . import SmbZfsManager, SmbZfsError, CONFIRM_PHRASE, NAME, SMB_CONF, AVAHI_SMB_SERVICE, prompt_for_password
 
+from .smb_zfs import SmbZfsManager
+from .errors import SmbZfsError
+from .const import CONFIRM_PHRASE, NAME, SMB_CONF, AVAHI_SMB_SERVICE
+from .pw_utils import prompt_for_password
 
 def handle_exception(func):
     """Decorator to catch and print SmbZfsError exceptions."""

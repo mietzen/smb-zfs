@@ -4,8 +4,11 @@ import argparse
 import socket
 import sys
 from importlib import metadata
-from . import SmbZfsManager, SmbZfsError, CONFIRM_PHRASE, NAME, prompt_for_password
 
+from .smb_zfs import SmbZfsManager
+from .errors import SmbZfsError
+from .const import CONFIRM_PHRASE, NAME
+from .pw_utils import prompt_for_password
 
 def prompt(message, default=None):
     """General purpose prompt that handles KeyboardInterrupt."""
