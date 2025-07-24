@@ -92,7 +92,6 @@ def wizard_setup(manager, args=None):
     except (SmbZfsError, ValueError) as e:
         print(f"\nError: {e}", file=sys.stderr)
 
-
 def wizard_create_user(manager, args=None):
     print("\n--- Create New User Wizard ---")
     try:
@@ -103,13 +102,15 @@ def wizard_create_user(manager, args=None):
         password = prompt_for_password(username)
         allow_shell = prompt_yes_no(
             "Allow shell access (/bin/bash)?", default="n")
+        create_home = prompt_yes_no(
+            "Create a home directory for this user?", default="y")
 
         groups_str = _list_and_prompt(
             manager, "groups", "Enter comma-separated groups to add user to (optional)", allow_empty=True)
         groups = [g.strip()
                   for g in groups_str.split(",")] if groups_str else []
 
-        result = manager.create_user(username, password, allow_shell, groups)
+        result = manager.create_user(username, password, allow_shell, groups, create_home)
         print(f"\nSuccess: {result}")
     except (SmbZfsError, ValueError) as e:
         print(f"\nError: {e}", file=sys.stderr)

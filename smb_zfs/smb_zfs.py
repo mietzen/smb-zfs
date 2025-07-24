@@ -162,7 +162,7 @@ class SmbZfsManager:
         return "Setup completed successfully."
 
     @requires_initialization
-    def create_user(self, username, password, allow_shell=False, groups=None):
+    def create_user(self, username, password, allow_shell=False, groups=None, create_home=True):
         self._validate_name(username, "user")
         if self._state.get_item("users", username):
             raise ItemExistsError("user", username)
@@ -170,19 +170,34 @@ class SmbZfsManager:
             raise ItemExistsError("system user", username)
 
         pool = self._state.get("zfs_pool")
-        home_dataset_name = f"{pool}/homes/{username}"
+        home_dataset_name = f"{pool}/homes/{username}" if create_home else None
 
         with self._transaction() as rollback:
-            # Action: Create ZFS dataset
-            self._zfs.create_dataset(home_dataset_name)
-            rollback.append(lambda: self._zfs.destroy_dataset(home_dataset_name))
+            user_data = {
+                "shell_access": allow_shell,
+                "groups": [],
+                "created": datetime.utcnow().isoformat(),
+            }
 
-            home_mountpoint = self._zfs.get_mountpoint(home_dataset_name)
+            home_mountpoint = None
+            if create_home:
+                # Action: Create ZFS dataset
+                self._zfs.create_dataset(home_dataset_name)
+                rollback.append(lambda: self._zfs.destroy_dataset(home_dataset_name))
 
-            # Action: Set quota
-            default_home_quota = self._state.get("default_home_quota")
-            if default_home_quota:
-                self._zfs.set_quota(home_dataset_name, default_home_quota)
+                home_mountpoint = self._zfs.get_mountpoint(home_dataset_name)
+
+                # Action: Set quota
+                default_home_quota = self._state.get("default_home_quota")
+                if default_home_quota:
+                    self._zfs.set_quota(home_dataset_name, default_home_quota)
+                
+                user_data["dataset"] = {
+                    "name": home_dataset_name,
+                    "mount_point": home_mountpoint,
+                    "quota": default_home_quota,
+                }
+
 
             # Action: Add system user
             self._system.add_system_user(
@@ -192,13 +207,14 @@ class SmbZfsManager:
             )
             rollback.append(lambda: self._system.delete_system_user(username))
 
-            # Actions: chown and chmod for home directory
-            os.chown(
-                home_mountpoint,
-                pwd.getpwnam(username).pw_uid,
-                pwd.getpwnam(username).pw_gid,
-            )
-            os.chmod(home_mountpoint, 0o700)
+            if create_home:
+                # Actions: chown and chmod for home directory
+                os.chown(
+                    home_mountpoint,
+                    pwd.getpwnam(username).pw_uid,
+                    pwd.getpwnam(username).pw_gid,
+                )
+                os.chmod(home_mountpoint, 0o700)
 
             # Action: Set system password if shell is allowed
             if allow_shell:
@@ -218,18 +234,10 @@ class SmbZfsManager:
                         user_groups.append(group)
                     else:
                         raise ItemNotFoundError("group", group)
+            
+            user_data["groups"] = user_groups
 
             # Action: Update state file (handled by transaction manager)
-            user_data = {
-                "shell_access": allow_shell,
-                "dataset": {
-                    "name": home_dataset_name,
-                    "mount_point": home_mountpoint,
-                    "quota": default_home_quota,
-                },
-                "groups": user_groups,
-                "created": datetime.utcnow().isoformat(),
-            }
             self._state.set_item("users", username, user_data)
 
         return f"User '{username}' created successfully."
@@ -244,7 +252,7 @@ class SmbZfsManager:
         if self._system.user_exists(username):
             self._system.delete_system_user(username)
 
-        if delete_data:
+        if delete_data and "dataset" in user_info and user_info["dataset"].get("name"):
             self._zfs.destroy_dataset(user_info["dataset"]["name"])
 
         self._state.delete_item("users", username)

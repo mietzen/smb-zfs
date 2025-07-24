@@ -66,18 +66,20 @@ def cmd_create_user(manager, args):
     """Handler for the 'create user' command."""
     password = args.password or prompt_for_password(args.user)
     groups = args.groups.split(",") if args.groups else []
+    create_home = not args.no_home
 
     if args.dry_run:
         print("--- Dry Run ---")
         print("Would perform the following actions:")
         print(f"  - Create system user: {args.user}")
-        print(
-            f"  - Create ZFS home dataset: {manager._state.get('zfs_pool')}/homes/{args.user}"
-        )
-        if manager._state.get('default_home_quota'):
+        if create_home:
             print(
-                f"  - Set ZFS quota: {manager._state.get('default_home_quota')}")
-        print("  - Set permissions on home directory")
+                f"  - Create ZFS home dataset: {manager._state.get('zfs_pool')}/homes/{args.user}"
+            )
+            if manager._state.get('default_home_quota'):
+                print(
+                    f"  - Set ZFS quota: {manager._state.get('default_home_quota')}")
+            print("  - Set permissions on home directory")
         print(f"  - Add Samba user: {args.user}")
         print("  - Add user to group 'smb_users'")
         if groups:
@@ -86,7 +88,7 @@ def cmd_create_user(manager, args):
         return
 
     check_root()
-    result = manager.create_user(args.user, password, args.shell, groups)
+    result = manager.create_user(args.user, password, args.shell, groups, create_home)
     print(result)
 
 
@@ -443,6 +445,11 @@ def main():
     )
     p_create_user.add_argument(
         "--groups", help="A comma-separated list of groups to add the user to."
+    )
+    p_create_user.add_argument(
+        "--no-home",
+        action="store_true",
+        help="Do not create a home directory for the user.",
     )
     p_create_user.add_argument(
         "--dry-run",
