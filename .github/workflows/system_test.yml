@@ -4,6 +4,7 @@ on:
   pull_request:
     branches:
       - main
+  workflow_dispatch:
 
 jobs:
   system_test:
@@ -45,6 +46,7 @@ jobs:
           docker exec -i debian bash << 'EOF'
           python3 -m venv .venv
           .venv/bin/pip install .
+          .venv/bin/pip install pytest
           EOF
       - name: '[Container] Start system test'
         run: |
