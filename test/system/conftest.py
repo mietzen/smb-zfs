@@ -39,7 +39,7 @@ def manage_smb_zfs_environment():
         pass
 
     # Setup smb-zfs. Corrected: The 'setup' command does not have a '--yes' flag.
-    run_smb_zfs_command("setup --primary-pool primary_testpool --secondary-pools secondary_testpool,tertiary_testpool --server-name TESTSERVER --workgroup TESTGROUP")
+    run_smb_zfs_command("setup --primary-pool primary_testpool --secondary-pools secondary_testpool tertiary_testpool --server-name TESTSERVER --workgroup TESTGROUP")
 
     yield
 
