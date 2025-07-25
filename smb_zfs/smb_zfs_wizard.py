@@ -37,7 +37,12 @@ def prompt_yes_no(message, default="n"):
 def _list_and_prompt(manager, item_type, prompt_message, allow_empty=False):
     """Helper to list items and then prompt for a choice."""
     try:
-        items = list(manager.list_items(item_type).keys())
+        if item_type == "pools":
+            items = [manager._state.get('primary_pool')] + \
+                manager._state.get('secondary_pools', [])
+        else:
+            items = list(manager.list_items(item_type).keys())
+
         if not items:
             if not allow_empty:
                 print(f"No managed {item_type} found.")
@@ -58,15 +63,20 @@ def _list_and_prompt(manager, item_type, prompt_message, allow_empty=False):
 def wizard_setup(manager, args=None):
     check_root()
     print("\n--- Initial System Setup Wizard ---")
-    available_pools = manager.list_pools()
+    available_pools = manager._zfs.list_pools()
     if available_pools:
         print("Available ZFS pools:", ", ".join(available_pools))
     else:
         print("Warning: No ZFS pools found.")
 
-    pool = prompt("Enter the name of the ZFS pool to use")
-    if not pool:
-        raise ValueError("Pool name cannot be empty.")
+    primary_pool = prompt("Enter the name of the ZFS primary pool to use")
+    if not primary_pool:
+        raise ValueError("Primary pool name cannot be empty.")
+
+    secondary_pools_str = prompt(
+        "Enter comma-separated secondary pools (optional)")
+    secondary_pools = [p.strip() for p in secondary_pools_str.split(
+        ',')] if secondary_pools_str else []
 
     server_name = prompt(
         "Enter the server's NetBIOS name", default=socket.gethostname()
@@ -79,7 +89,9 @@ def wizard_setup(manager, args=None):
         "Enter a default quota for user homes (e.g., 10G, optional)")
 
     print("\nSummary of actions:")
-    print(f" - ZFS Pool: {pool}")
+    print(f" - ZFS Primary Pool: {primary_pool}")
+    if secondary_pools:
+        print(f" - ZFS Secondary Pools: {', '.join(secondary_pools)}")
     print(f" - Server Name: {server_name}")
     print(f" - Workgroup: {workgroup}")
     print(f" - macOS Optimized: {macos_optimized}")
@@ -88,7 +100,7 @@ def wizard_setup(manager, args=None):
 
     if prompt_yes_no("Proceed with setup?", default="y"):
         result = manager.setup(
-            pool, server_name, workgroup, macos_optimized, default_home_quota)
+            primary_pool, secondary_pools, server_name, workgroup, macos_optimized, default_home_quota)
         print(f"\nSuccess: {result}")
 
 
@@ -111,7 +123,8 @@ def wizard_create_user(manager, args=None):
     groups = [g.strip()
               for g in groups_str.split(",")] if groups_str else []
 
-    result = manager.create_user(username, password, allow_shell, groups, create_home)
+    result = manager.create_user(
+        username, password, allow_shell, groups, create_home)
     print(f"\nSuccess: {result}")
 
 
@@ -122,8 +135,13 @@ def wizard_create_share(manager, args=None):
     share_name = prompt("Enter the name for the new share")
     if not share_name:
         raise ValueError("Share name cannot be empty.")
+
+    primary_pool = manager._state.get('primary_pool')
+    pool = _list_and_prompt(
+        manager, "pools", f"Enter the pool for the share (default: {primary_pool})") or primary_pool
+
     dataset_path = prompt(
-        "Enter the ZFS dataset path within the pool (e.g., data/media)"
+        f"Enter the ZFS dataset path within the pool '{pool}' (e.g., data/media)"
     )
     if not dataset_path:
         raise ValueError("Dataset path cannot be empty.")
@@ -156,6 +174,7 @@ def wizard_create_share(manager, args=None):
         read_only,
         browseable,
         quota,
+        pool
     )
     print(f"\nSuccess: {result}")
 
@@ -219,22 +238,34 @@ def wizard_modify_share(manager, args=None):
         raise SmbZfsError(f"Share '{share_name}' not found.")
 
     kwargs = {}
+
+    current_pool = share_info.get('dataset', {}).get('pool')
+    if prompt_yes_no(f"Move share from pool '{current_pool}'?", 'n'):
+        kwargs['pool'] = _list_and_prompt(
+            manager, "pools", "Select the new pool")
+
     kwargs['comment'] = prompt(
-        "Comment", default=share_info.get('comment'))
+        "Comment", default=share_info.get('smb_config', {}).get('comment'))
     kwargs['owner'] = _list_and_prompt(
-        manager, "users", f"Owner [{share_info.get('owner')}]", allow_empty=True) or share_info.get('owner')
+        manager, "users", f"Owner [{share_info.get('system', {}).get('owner')}]", allow_empty=True) or share_info.get('system', {}).get('owner')
     kwargs['group'] = _list_and_prompt(
-        manager, "groups", f"Group [{share_info.get('group')}]", allow_empty=True) or share_info.get('group')
+        manager, "groups", f"Group [{share_info.get('system', {}).get('group')}]", allow_empty=True) or share_info.get('system', {}).get('group')
     kwargs['permissions'] = prompt(
-        "Permissions", default=share_info.get('permissions'))
+        "Permissions", default=share_info.get('system', {}).get('permissions'))
     kwargs['valid_users'] = prompt(
-        "Valid Users", default=share_info.get('valid_users'))
+        "Valid Users", default=share_info.get('smb_config', {}).get('valid_users'))
     kwargs['read_only'] = prompt_yes_no(
-        "Read-only?", 'y' if share_info.get('read_only') else 'n')
+        "Read-only?", 'y' if share_info.get('smb_config', {}).get('read_only') else 'n')
     kwargs['browseable'] = prompt_yes_no(
-        "Browseable?", 'y' if share_info.get('browseable') else 'n')
+        "Browseable?", 'y' if share_info.get('smb_config', {}).get('browseable') else 'n')
     kwargs['quota'] = prompt(
-        "Quota (e.g., 200G or 'none')", default=share_info.get('quota'))
+        "Quota (e.g., 200G or 'none')", default=share_info.get('dataset', {}).get('quota'))
+
+    kwargs = {k: v for k, v in kwargs.items() if v is not None}
+
+    if not kwargs:
+        print("No changes were made.")
+        return
 
     result = manager.modify_share(share_name, **kwargs)
     print(f"\nSuccess: {result}")
@@ -247,37 +278,61 @@ def wizard_modify_setup(manager, args=None):
     print("Enter new values or press Enter to keep the current value.")
 
     current_state = {
+        'primary_pool': manager._state.get('primary_pool'),
+        'secondary_pools': manager._state.get('secondary_pools', []),
         'server_name': manager._state.get('server_name'),
         'workgroup': manager._state.get('workgroup'),
         'macos_optimized': manager._state.get('macos_optimized'),
         'default_home_quota': manager._state.get('default_home_quota'),
     }
 
-    new_server_name = prompt(
-        "Server Name", default=current_state['server_name'])
-    new_workgroup = prompt("Workgroup", default=current_state['workgroup'])
-    new_macos = prompt_yes_no(
-        "macOS Optimized?", 'y' if current_state['macos_optimized'] else 'n')
-    new_quota_str = prompt("Default Home Quota (e.g., 50G or 'none')",
-                           default=current_state['default_home_quota'] or 'none')
-
-    new_quota = new_quota_str if new_quota_str and new_quota_str.lower() != 'none' else None
-
     kwargs = {}
-    if new_server_name != current_state['server_name']:
-        kwargs['server_name'] = new_server_name
-    if new_workgroup != current_state['workgroup']:
-        kwargs['workgroup'] = new_workgroup
-    if new_macos != current_state['macos_optimized']:
-        kwargs['macos_optimized'] = new_macos
-    if new_quota != current_state['default_home_quota']:
-        kwargs['default_home_quota'] = new_quota
+    move_data = False
 
-    if not kwargs:
+    available_pools = manager._zfs.list_pools()
+    print("Available ZFS pools:", ", ".join(available_pools))
+    new_primary_pool = prompt("Primary Pool", default=current_state['primary_pool'])
+    if new_primary_pool != current_state['primary_pool']:
+        kwargs['primary_pool'] = new_primary_pool
+        move_data = prompt_yes_no(
+            f"Move all datasets from '{current_state['primary_pool']}' to '{new_primary_pool}'?", 'n')
+
+    new_secondary_pools_str = prompt(
+        f"Secondary Pools", default=", ".join(current_state['secondary_pools']))
+    new_secondary_pools = [p.strip() for p in new_secondary_pools_str.split(
+        ',')] if new_secondary_pools_str else []
+
+    pools_to_add = list(set(new_secondary_pools) -
+                        set(current_state['secondary_pools']))
+    pools_to_remove = list(
+        set(current_state['secondary_pools']) - set(new_secondary_pools))
+    if pools_to_add:
+        kwargs['add_secondary_pools'] = pools_to_add
+    if pools_to_remove:
+        kwargs['remove_secondary_pools'] = pools_to_remove
+
+    kwargs['server_name'] = prompt(
+        "Server Name", default=current_state['server_name'])
+    kwargs['workgroup'] = prompt(
+        "Workgroup", default=current_state['workgroup'])
+    kwargs['macos_optimized'] = prompt_yes_no(
+        "macOS Optimized?", 'y' if current_state['macos_optimized'] else 'n')
+    kwargs['default_home_quota'] = prompt("Default Home Quota (e.g., 50G or 'none')",
+                                          default=current_state['default_home_quota'] or 'none')
+
+    # Filter out non-changes
+    final_kwargs = {}
+    for k, v in kwargs.items():
+        if k in ['add_secondary_pools', 'remove_secondary_pools'] and v:
+            final_kwargs[k] = v
+        elif k not in ['add_secondary_pools', 'remove_secondary_pools'] and v != current_state.get(k):
+            final_kwargs[k] = v
+
+    if not final_kwargs:
         print("No changes were made.")
         return
 
-    result = manager.modify_setup(**kwargs)
+    result = manager.modify_setup(move_data=move_data, **final_kwargs)
     print(f"\nSuccess: {result}")
 
 
@@ -291,13 +346,13 @@ def wizard_modify_home(manager, args=None):
         return
 
     user_info = manager.list_items("users").get(username, {})
-    home_dataset = user_info.get('home_dataset')
+    dataset_info = user_info.get('dataset')
 
-    if not home_dataset:
+    if not dataset_info:
         raise SmbZfsError(
-            f"Could not find home dataset for user '{username}'.")
+            f"Could not find dataset info for user '{username}'.")
 
-    current_quota = manager._zfs.get_quota(home_dataset)
+    current_quota = manager._zfs.get_quota(dataset_info['name'])
     new_quota = prompt(
         f"Enter new quota for {username}'s home (e.g., 25G or 'none')", default=current_quota)
 
@@ -455,11 +510,9 @@ def main():
 
     try:
         manager = SmbZfsManager()
-        # Add a list_pools method to the manager for the wizard to use
-        manager.list_pools = lambda: manager._zfs.list_pools()
         args.func(manager, args)
     except SmbZfsError as e:
-        print(f"Initialization Error: {e}", file=sys.stderr)
+        print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
     except KeyboardInterrupt:
         print("\n\nOperation cancelled by user.")

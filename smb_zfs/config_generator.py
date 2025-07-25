@@ -14,7 +14,7 @@ class ConfigGenerator:
             )
             shutil.copy(file_path, backup_path)
 
-    def create_smb_conf(self, pool, server_name, workgroup, macos_optimized):
+    def create_smb_conf(self, primary_pool, server_name, workgroup, macos_optimized):
         self._backup_file(SMB_CONF)
         content = f"""
 [global]
@@ -48,7 +48,7 @@ class ConfigGenerator:
         content += f"""
 [homes]
     comment = Home Directories
-    path = /{pool}/homes/%S
+    path = /{primary_pool}/homes/%S
     browseable = no
     read only = no
     create mask = 0700
@@ -101,7 +101,8 @@ class ConfigGenerator:
         with open(SMB_CONF, "r") as f:
             lines = f.readlines()
 
-        share_pattern = re.compile(r"^\s*\[{}\]\s*$".format(re.escape(share_name)))
+        share_pattern = re.compile(
+            r"^\s*\[{}\]\s*$".format(re.escape(share_name)))
         section_pattern = re.compile(r"^\s*\[.*\]\s*$")
 
         in_section = False

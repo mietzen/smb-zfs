@@ -24,7 +24,8 @@ from .errors import (
     ImmutableError,
 )
 
-STATE_FILE=f"/var/lib/{NAME}.state"
+STATE_FILE = f"/var/lib/{NAME}.state"
+
 
 def requires_initialization(func):
     """Decorator to ensure the system is initialized before running a method."""
@@ -54,7 +55,8 @@ class SmbZfsManager:
         added manually to the rollback list.
         """
         rollback_actions = []
-        original_state_data = json.loads(json.dumps(self._state.data))  # Deep copy
+        original_state_data = json.loads(
+            json.dumps(self._state.data))  # Deep copy
 
         try:
             yield rollback_actions
@@ -112,9 +114,11 @@ class SmbZfsManager:
                     f"{item_type.capitalize()} name '{name}' contains invalid characters."
                 )
 
-    def setup(self, pool, server_name, workgroup, macos_optimized=False, default_home_quota=None):
+    def setup(self, primary_pool, secondary_pools, server_name, workgroup, macos_optimized=False, default_home_quota=None):
         if self._state.is_initialized():
             raise AlreadyInitializedError()
+
+        secondary_pools = secondary_pools or []
 
         # Check for required Debian packages instead of commands
         required_packages = ["zfsutils-linux", "samba", "avahi-daemon"]
@@ -124,27 +128,33 @@ class SmbZfsManager:
                     f"Required package '{pkg}' is not installed. Please install it first."
                 )
 
-        # Validate that the provided ZFS pool exists.
+        # Validate that the provided ZFS pools exist.
         available_pools = self._zfs.list_pools()
-        if pool not in available_pools:
-            raise ItemNotFoundError(f"ZFS pool '{pool}' not found. Available pools", ", ".join(available_pools) if available_pools else "None")
+        if primary_pool not in available_pools:
+            raise ItemNotFoundError(f"ZFS pool '{primary_pool}' not found. Available pools", ", ".join(
+                available_pools) if available_pools else "None")
+        for pool in secondary_pools:
+            if pool not in available_pools:
+                raise ItemNotFoundError(f"ZFS secondary pool '{pool}' not found. Available pools", ", ".join(
+                    available_pools) if available_pools else "None")
 
-
-        self._zfs.create_dataset(f"{pool}/homes")
-        homes_mountpoint = self._zfs.get_mountpoint(f"{pool}/homes")
+        self._zfs.create_dataset(f"{primary_pool}/homes")
+        homes_mountpoint = self._zfs.get_mountpoint(f"{primary_pool}/homes")
         os.chmod(homes_mountpoint, 0o755)
 
         if not self._system.group_exists("smb_users"):
             self._system.add_system_group("smb_users")
 
-        self._config.create_smb_conf(pool, server_name, workgroup, macos_optimized)
+        self._config.create_smb_conf(
+            primary_pool, server_name, workgroup, macos_optimized)
         self._config.create_avahi_conf()
         self._system.test_samba_config()
         self._system.enable_services()
         self._system.restart_services()
 
         self._state.set("initialized", True)
-        self._state.set("zfs_pool", pool)
+        self._state.set("primary_pool", primary_pool)
+        self._state.set("secondary_pools", secondary_pools)
         self._state.set("server_name", server_name)
         self._state.set("workgroup", workgroup)
         self._state.set("macos_optimized", macos_optimized)
@@ -169,8 +179,8 @@ class SmbZfsManager:
         if self._system.user_exists(username):
             raise ItemExistsError("system user", username)
 
-        pool = self._state.get("zfs_pool")
-        home_dataset_name = f"{pool}/homes/{username}" if create_home else None
+        primary_pool = self._state.get("primary_pool")
+        home_dataset_name = f"{primary_pool}/homes/{username}" if create_home else None
 
         with self._transaction() as rollback:
             user_data = {
@@ -183,7 +193,8 @@ class SmbZfsManager:
             if create_home:
                 # Action: Create ZFS dataset
                 self._zfs.create_dataset(home_dataset_name)
-                rollback.append(lambda: self._zfs.destroy_dataset(home_dataset_name))
+                rollback.append(
+                    lambda: self._zfs.destroy_dataset(home_dataset_name))
 
                 home_mountpoint = self._zfs.get_mountpoint(home_dataset_name)
 
@@ -191,13 +202,13 @@ class SmbZfsManager:
                 default_home_quota = self._state.get("default_home_quota")
                 if default_home_quota:
                     self._zfs.set_quota(home_dataset_name, default_home_quota)
-                
+
                 user_data["dataset"] = {
                     "name": home_dataset_name,
                     "mount_point": home_mountpoint,
                     "quota": default_home_quota,
+                    "pool": primary_pool
                 }
-
 
             # Action: Add system user
             self._system.add_system_user(
@@ -234,7 +245,7 @@ class SmbZfsManager:
                         user_groups.append(group)
                     else:
                         raise ItemNotFoundError("group", group)
-            
+
             user_data["groups"] = user_groups
 
             # Action: Update state file (handled by transaction manager)
@@ -269,7 +280,8 @@ class SmbZfsManager:
         with self._transaction() as rollback:
             # Action: Create system group
             self._system.add_system_group(groupname)
-            rollback.append(lambda: self._system.delete_system_group(groupname))
+            rollback.append(
+                lambda: self._system.delete_system_group(groupname))
 
             # Action: Add members to the new group
             added_members = []
@@ -295,7 +307,8 @@ class SmbZfsManager:
         if not self._state.get_item("groups", groupname):
             raise ItemNotFoundError("group", groupname)
         if groupname == "smb_users":
-            raise ImmutableError("Cannot delete the mandatory 'smb_users' group.")
+            raise ImmutableError(
+                "Cannot delete the mandatory 'smb_users' group.")
 
         if self._system.group_exists(groupname):
             self._system.delete_system_group(groupname)
@@ -316,16 +329,19 @@ class SmbZfsManager:
         read_only=False,
         browseable=True,
         quota=None,
+        pool=None,
     ):
         self._validate_name(name, "share")
         if self._state.get_item("shares", name):
             raise ItemExistsError("share", name)
 
         if ".." in dataset_path or dataset_path.startswith('/'):
-            raise InvalidNameError("Dataset path cannot contain '..' or be an absolute path.")
+            raise InvalidNameError(
+                "Dataset path cannot contain '..' or be an absolute path.")
 
         if not re.match(r"^[0-7]{3,4}$", perms):
-            raise InvalidNameError(f"Permissions '{perms}' are invalid. Must be 3 or 4 octal digits (e.g., 775 or 0775).")
+            raise InvalidNameError(
+                f"Permissions '{perms}' are invalid. Must be 3 or 4 octal digits (e.g., 775 or 0775).")
 
         if not self._system.user_exists(owner):
             raise ItemNotFoundError("user", owner)
@@ -333,8 +349,16 @@ class SmbZfsManager:
         if not self._system.group_exists(group):
             raise ItemNotFoundError("group", group)
 
-        pool = self._state.get("zfs_pool")
-        full_dataset = f"{pool}/{dataset_path}"
+        primary_pool = self._state.get("primary_pool")
+        secondary_pools = self._state.get("secondary_pools", [])
+        managed_pools = [primary_pool] + secondary_pools
+
+        target_pool = pool or primary_pool
+        if target_pool not in managed_pools:
+            raise SmbZfsError(
+                f"Pool '{target_pool}' is not a valid pool. Managed pools are: {', '.join(managed_pools)}")
+
+        full_dataset = f"{target_pool}/{dataset_path}"
 
         with self._transaction() as rollback:
             # Action: Create ZFS dataset
@@ -366,6 +390,7 @@ class SmbZfsManager:
                     "name": full_dataset,
                     "mount_point": mount_point,
                     "quota": quota,
+                    "pool": target_pool,
                 },
                 "smb_config": {
                     "comment": comment,
@@ -383,6 +408,7 @@ class SmbZfsManager:
 
             # Action: Modify Samba config and reload
             self._config.add_share_to_conf(name, share_data)
+
             def samba_rollback():
                 self._config.remove_share_from_conf(name)
                 self._system.test_samba_config()
@@ -431,7 +457,7 @@ class SmbZfsManager:
             for user in remove_users:
                 if not self._state.get_item("users", user):
                     raise ItemNotFoundError("user", user)
-                
+
                 if user in current_members:
                     self._system.remove_user_from_group(user, groupname)
                     current_members.discard(user)
@@ -448,12 +474,40 @@ class SmbZfsManager:
 
         samba_config_changed = False
         original_share_info = json.loads(json.dumps(share_info))
+        new_dataset_name = None
 
         try:
+            if 'pool' in kwargs and kwargs['pool'] is not None and kwargs['pool'] != share_info['dataset']['pool']:
+                new_pool = kwargs['pool']
+                primary_pool = self._state.get("primary_pool")
+                secondary_pools = self._state.get("secondary_pools", [])
+                managed_pools = [primary_pool] + secondary_pools
+                if new_pool not in managed_pools:
+                    raise SmbZfsError(
+                        f"Target pool '{new_pool}' is not a valid managed pool.")
+
+                old_dataset_name = share_info['dataset']['name']
+                dataset_path_in_pool = '/'.join(
+                    old_dataset_name.split('/')[1:])
+                new_dataset_name = f"{new_pool}/{dataset_path_in_pool}"
+
+                if self._zfs.dataset_exists(new_dataset_name):
+                    raise ItemExistsError("dataset", new_dataset_name)
+
+                self._zfs.rename_dataset(old_dataset_name, new_dataset_name)
+
+                share_info['dataset']['pool'] = new_pool
+                share_info['dataset']['name'] = new_dataset_name
+                share_info['dataset']['mount_point'] = self._zfs.get_mountpoint(
+                    new_dataset_name)
+                samba_config_changed = True
+
             if 'quota' in kwargs and kwargs['quota'] is not None:
-                new_quota = kwargs['quota'] if kwargs['quota'].lower() != 'none' else None
+                new_quota = kwargs['quota'] if kwargs['quota'].lower(
+                ) != 'none' else None
                 share_info['dataset']['quota'] = new_quota
                 self._zfs.set_quota(share_info["dataset"]["name"], new_quota)
+
             system_changed = False
             if 'owner' in kwargs and kwargs['owner'] is not None:
                 if not self._system.user_exists(kwargs['owner']):
@@ -465,10 +519,11 @@ class SmbZfsManager:
                     raise ItemNotFoundError("group", kwargs['group'])
                 share_info['system']['group'] = kwargs['group']
                 system_changed = True
-            if 'perms' in kwargs and kwargs['perms'] is not None:
-                perms = kwargs['perms']
+            if 'permissions' in kwargs and kwargs['permissions'] is not None:
+                perms = kwargs['permissions']
                 if not re.match(r"^[0-7]{3,4}$", perms):
-                    raise InvalidNameError(f"Permissions '{perms}' are invalid. Must be 3 or 4 octal digits (e.g., 775 or 0775).")
+                    raise InvalidNameError(
+                        f"Permissions '{perms}' are invalid. Must be 3 or 4 octal digits (e.g., 775 or 0775).")
                 share_info['system']['permissions'] = perms
                 system_changed = True
 
@@ -477,7 +532,8 @@ class SmbZfsManager:
                 uid = pwd.getpwnam(share_info['system']['owner']).pw_uid
                 gid = grp.getgrnam(share_info['system']['group']).gr_gid
                 os.chown(mount_point, uid, gid)
-                os.chmod(mount_point, int(share_info['system']['permissions'], 8))
+                os.chmod(mount_point, int(
+                    share_info['system']['permissions'], 8))
                 samba_config_changed = True
 
             if 'comment' in kwargs and kwargs['comment'] is not None:
@@ -510,31 +566,109 @@ class SmbZfsManager:
                 self._system.reload_samba()
 
         except Exception:
-            # Rollback in-memory and file state on failure
             self._state.set_item("shares", share_name, original_share_info)
-            # Re-raise the exception
+            if new_dataset_name and self._zfs.dataset_exists(new_dataset_name):
+                self._zfs.rename_dataset(
+                    new_dataset_name, original_share_info['dataset']['name'])
             raise
 
         return f"Share '{share_name}' modified successfully."
 
     @requires_initialization
-    def modify_setup(self, **kwargs):
-        for key, value in kwargs.items():
-            self._state.set(key, value)
+    def modify_setup(self, move_data=False, **kwargs):
+        original_state = json.loads(json.dumps(self._state.data))
+        config_needs_update = False
 
-        if any(k in kwargs for k in ['server_name', 'workgroup', 'macos_optimized']):
-            pool = self._state.get("zfs_pool")
-            server_name = self._state.get("server_name")
-            workgroup = self._state.get("workgroup")
-            macos_optimized = self._state.get("macos_optimized")
-            self._config.create_smb_conf(pool, server_name, workgroup, macos_optimized)
+        try:
+            if 'primary_pool' in kwargs and kwargs['primary_pool'] is not None:
+                new_primary_pool = kwargs['primary_pool']
+                old_primary_pool = self._state.get('primary_pool')
+                if new_primary_pool != old_primary_pool:
+                    if new_primary_pool not in self._zfs.list_pools():
+                        raise ItemNotFoundError("ZFS pool", new_primary_pool)
 
-            all_shares = self.list_items("shares")
-            for share_name, share_info in all_shares.items():
-                self._config.add_share_to_conf(share_name, share_info)
+                    if move_data:
+                        print("Moving data from old primary pool to new primary pool...")
+                        self._zfs.rename_dataset(
+                            f"{old_primary_pool}/homes", f"{new_primary_pool}/homes")
 
-            self._system.test_samba_config()
-            self._system.reload_samba()
+                        all_users = self._state.list_items("users")
+                        for username, user_info in all_users.items():
+                            user_info['dataset']['name'] = user_info['dataset']['name'].replace(
+                                old_primary_pool, new_primary_pool, 1)
+                            user_info['dataset']['mount_point'] = self._zfs.get_mountpoint(
+                                user_info['dataset']['name'])
+                            user_info['dataset']['pool'] = new_primary_pool
+                            self._state.set_item("users", username, user_info)
+
+                        all_shares = self._state.list_items("shares")
+                        for share_name, share_info in all_shares.items():
+                            if share_info['dataset']['pool'] == old_primary_pool:
+                                old_dataset_name = share_info['dataset']['name']
+                                dataset_path_in_pool = '/'.join(
+                                    old_dataset_name.split('/')[1:])
+                                new_dataset_name = f"{new_primary_pool}/{dataset_path_in_pool}"
+                                self._zfs.rename_dataset(
+                                    old_dataset_name, new_dataset_name)
+                                share_info['dataset']['pool'] = new_primary_pool
+                                share_info['dataset']['name'] = new_dataset_name
+                                share_info['dataset']['mount_point'] = self._zfs.get_mountpoint(
+                                    new_dataset_name)
+                                self._state.set_item(
+                                    "shares", share_name, share_info)
+
+                    self._state.set('primary_pool', new_primary_pool)
+                    config_needs_update = True
+
+            if 'add_secondary_pools' in kwargs and kwargs['add_secondary_pools']:
+                current_pools = set(self._state.get('secondary_pools', []))
+                for pool in kwargs['add_secondary_pools']:
+                    if pool not in self._zfs.list_pools():
+                        raise ItemNotFoundError("ZFS pool", pool)
+                    current_pools.add(pool)
+                self._state.set('secondary_pools', sorted(list(current_pools)))
+
+            if 'remove_secondary_pools' in kwargs and kwargs['remove_secondary_pools']:
+                pools_to_remove = set(kwargs['remove_secondary_pools'])
+                all_shares = self._state.list_items("shares")
+                for share_name, share_info in all_shares.items():
+                    if share_info['dataset']['pool'] in pools_to_remove:
+                        raise SmbZfsError(
+                            f"Cannot remove pool '{share_info['dataset']['pool']}' as it is used by share '{share_name}'.")
+
+                current_pools = set(self._state.get('secondary_pools', []))
+                current_pools -= pools_to_remove
+                self._state.set('secondary_pools', sorted(list(current_pools)))
+
+            for key in ['server_name', 'workgroup', 'macos_optimized', 'default_home_quota']:
+                if key in kwargs and kwargs[key] is not None:
+                    value = kwargs[key]
+                    if key == 'default_home_quota' and value.lower() == 'none':
+                        value = None
+                    self._state.set(key, value)
+                    config_needs_update = True
+
+            if config_needs_update:
+                primary_pool = self._state.get("primary_pool")
+                server_name = self._state.get("server_name")
+                workgroup = self._state.get("workgroup")
+                macos_optimized = self._state.get("macos_optimized")
+                self._config.create_smb_conf(
+                    primary_pool, server_name, workgroup, macos_optimized)
+
+                all_shares = self.list_items("shares")
+                for share_name, share_info in all_shares.items():
+                    self._config.add_share_to_conf(share_name, share_info)
+
+                self._system.test_samba_config()
+                self._system.reload_samba()
+
+        except Exception as e:
+            self._state.data = original_state
+            self._state.save()
+            print(
+                f"Error during setup modification: {e}. State restored, but filesystem changes might need manual rollback.", file=sys.stderr)
+            raise
 
         return "Global setup modified successfully."
 
@@ -565,23 +699,24 @@ class SmbZfsManager:
 
     @requires_initialization
     def list_items(self, category):
-        if category not in ["users", "groups", "shares"]:
+        if category not in ["users", "groups", "shares", "pools"]:
             raise SmbZfsError("Invalid category to list.")
+
+        if category == "pools":
+            primary_pool = self._state.get("primary_pool")
+            secondary_pools = self._state.get("secondary_pools", [])
+            return {"primary_pool": primary_pool, "secondary_pools": secondary_pools}
 
         items = self._state.list_items(category)
 
         if category == "users":
             for name, data in items.items():
                 quota = self._zfs.get_quota(data["dataset"]["name"])
-                if data["dataset"]["quota"] != quota:
-                    print(f"Warning quota in state for user {name} differs from real quota! state: {data["dataset"]["quota"]}, live:{quota}")
                 data["dataset"]["quota"] = quota if quota and quota != 'none' else "Not Set"
 
         if category == "shares":
             for name, data in items.items():
                 quota = self._zfs.get_quota(data["dataset"]["name"])
-                if data["dataset"]["quota"] != quota:
-                    print(f"Warning quota in state for share {name} differs from real quota! state: {data["dataset"]["quota"]}, live:{quota}")
                 data["dataset"]["quota"] = quota if quota and quota != 'none' else "Not Set"
 
         return items
@@ -590,7 +725,7 @@ class SmbZfsManager:
         if not self._state.is_initialized():
             return "System is not set up, nothing to do."
 
-        pool = self._state.get("zfs_pool")
+        primary_pool = self._state.get("primary_pool")
         users = self.list_items("users")
         groups = self.list_items("groups")
         shares = self.list_items("shares")
@@ -607,14 +742,14 @@ class SmbZfsManager:
             if self._system.group_exists("smb_users"):
                 self._system.delete_system_group("smb_users")
 
-        if delete_data and pool:
+        if delete_data and primary_pool:
             for share_info in shares.values():
                 if "dataset" in share_info:
                     self._zfs.destroy_dataset(share_info["dataset"]["name"])
             for user_info in users.values():
                 self._zfs.destroy_dataset(user_info["dataset"]["name"])
-            if self._zfs.dataset_exists(f"{pool}/homes"):
-                self._zfs.destroy_dataset(f"{pool}/homes")
+            if self._zfs.dataset_exists(f"{primary_pool}/homes"):
+                self._zfs.destroy_dataset(f"{primary_pool}/homes")
 
         self._system.stop_services()
         self._system.disable_services()
@@ -624,6 +759,7 @@ class SmbZfsManager:
                 try:
                     os.remove(f)
                 except OSError as e:
-                    print(f"Warning: could not remove file {f}: {e}", file=sys.stderr)
+                    print(
+                        f"Warning: could not remove file {f}: {e}", file=sys.stderr)
 
         return "Removal completed successfully."

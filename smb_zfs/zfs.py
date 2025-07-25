@@ -25,7 +25,7 @@ class Zfs:
 
     def create_dataset(self, dataset):
         if not self.dataset_exists(dataset):
-            self._system._run(["zfs", "create", dataset])
+            self._system._run(["zfs", "create", "-p", dataset])
 
     def destroy_dataset(self, dataset):
         if self.dataset_exists(dataset):
@@ -42,3 +42,8 @@ class Zfs:
             )
             return result.stdout.strip()
         return None
+
+    def rename_dataset(self, old_dataset, new_dataset):
+        """Renames a ZFS dataset."""
+        if self.dataset_exists(old_dataset):
+            self._system._run(["zfs", "rename", old_dataset, new_dataset])

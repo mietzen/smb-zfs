@@ -14,9 +14,11 @@ class StateManager:
         self.load()
 
     def _initialize_state_file(self):
+        """Initializes the state file with the new structure."""
         initial_state = {
             "initialized": False,
-            "zfs_pool": None,
+            "primary_pool": None,
+            "secondary_pools": [],
             "server_name": None,
             "workgroup": None,
             "macos_optimized": False,
@@ -26,6 +28,7 @@ class StateManager:
             "groups": {},
         }
         try:
+            os.makedirs(os.path.dirname(self.path), exist_ok=True)
             with open(self.path, "w") as f:
                 json.dump(initial_state, f, indent=2)
             os.chmod(self.path, 0o600)
@@ -53,7 +56,8 @@ class StateManager:
                 json.dump(self.data, f, indent=2)
             os.chmod(self.path, 0o600)
         except IOError as e:
-            raise SmbZfsError(f"Failed to write state file {self.path}: {e}") from e
+            raise SmbZfsError(
+                f"Failed to write state file {self.path}: {e}") from e
 
     def is_initialized(self):
         return self.data.get("initialized", False)

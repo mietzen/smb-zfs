@@ -2,7 +2,6 @@
 
 import argparse
 import getpass
-import os
 import socket
 import sys
 from importlib import metadata
@@ -24,10 +23,12 @@ def cmd_setup(manager, args):
         print("--- Dry Run ---")
         print("Would perform the following actions:")
         print("  - Check for required pkgs: zfsutils-linux, samba, avahi-daemon")
-        print(f"  - Create ZFS dataset: {args.pool}/homes")
+        print(f"  - Create ZFS dataset: {args.primary_pool}/homes")
         print("  - Create system group: smb_users")
         print(f"  - Generate {SMB_CONF} with:")
-        print(f"    - Pool: {args.pool}")
+        print(f"    - Primary Pool: {args.primary_pool}")
+        if args.secondary_pools:
+            print(f"    - Secondary Pools: {', '.join(args.secondary_pools)}")
         print(f"    - Server Name: {server_name}")
         print(f"    - Workgroup: {workgroup}")
         print(f"    - macOS optimized: {args.macos}")
@@ -38,7 +39,7 @@ def cmd_setup(manager, args):
         print(f"  - Initialize state file at {manager._state.path}")
         return
 
-    result = manager.setup(args.pool, server_name, workgroup,
+    result = manager.setup(args.primary_pool, args.secondary_pools, server_name, workgroup,
                            args.macos, args.default_home_quota)
     print(result)
 
@@ -56,7 +57,7 @@ def cmd_create_user(manager, args):
         print(f"  - Create system user: {args.user}")
         if create_home:
             print(
-                f"  - Create ZFS home dataset: {manager._state.get('zfs_pool')}/homes/{args.user}"
+                f"  - Create ZFS home dataset: {manager._state.get('primary_pool')}/homes/{args.user}"
             )
             if manager._state.get('default_home_quota'):
                 print(
@@ -70,7 +71,8 @@ def cmd_create_user(manager, args):
         return
 
     check_root()
-    result = manager.create_user(args.user, password, args.shell, groups, create_home)
+    result = manager.create_user(
+        args.user, password, args.shell, groups, create_home)
     print(result)
 
 
@@ -78,10 +80,11 @@ def cmd_create_user(manager, args):
 def cmd_create_share(manager, args):
     """Handler for the 'create share' command."""
     if args.dry_run:
+        target_pool = args.pool or manager._state.get('primary_pool')
         print("--- Dry Run ---")
         print("Would perform the following actions:")
         print(
-            f"  - Create ZFS dataset: {manager._state.get('zfs_pool')}/{args.dataset}"
+            f"  - Create ZFS dataset: {target_pool}/{args.dataset}"
         )
         if args.quota:
             print(f"  - Set ZFS quota to {args.quota}")
@@ -105,6 +108,7 @@ def cmd_create_share(manager, args):
         read_only=args.readonly,
         browseable=not args.no_browse,
         quota=args.quota,
+        pool=args.pool,
     )
     print(result)
 
@@ -160,6 +164,7 @@ def cmd_modify_share(manager, args):
         'owner': args.owner,
         'group': args.group,
         'quota': args.quota,
+        'pool': args.pool,
     }
     # Filter out unset arguments
     kwargs = {k: v for k, v in kwargs.items() if v is not None}
@@ -191,10 +196,13 @@ def cmd_modify_setup(manager, args):
     if args.macos is not None:
         kwargs['macos_optimized'] = args.macos
     if args.default_home_quota is not None:
-        if args.default_home_quota.lower() == 'none':
-            kwargs['default_home_quota'] = None
-        else:
-            kwargs['default_home_quota'] = args.default_home_quota
+        kwargs['default_home_quota'] = args.default_home_quota
+    if args.primary_pool is not None:
+        kwargs['primary_pool'] = args.primary_pool
+    if args.add_secondary_pools is not None:
+        kwargs['add_secondary_pools'] = args.add_secondary_pools
+    if args.remove_secondary_pools is not None:
+        kwargs['remove_secondary_pools'] = args.remove_secondary_pools
 
     if not kwargs:
         print("No modifications specified. Use --help to see options.", file=sys.stderr)
@@ -205,10 +213,12 @@ def cmd_modify_setup(manager, args):
         print("Would modify global setup with the following changes:")
         for key, value in kwargs.items():
             print(f"  - Set {key} to: {value}")
+        if args.move_data:
+            print("  - Move data: True")
         return
 
     check_root()
-    result = manager.modify_setup(**kwargs)
+    result = manager.modify_setup(move_data=args.move_data, **kwargs)
     print(result)
 
 
@@ -236,7 +246,7 @@ def cmd_delete_user(manager, args):
         print(f"  - Remove system user: {args.user}")
         if args.delete_data:
             print(
-                f"  - DESTROY ZFS dataset: {manager._state.get_item('users', args.user)['home_dataset']}"
+                f"  - DESTROY ZFS dataset: {manager._state.get_item('users', args.user)['dataset']['name']}"
             )
         print("  - Update state file")
         return
@@ -263,7 +273,7 @@ def cmd_delete_share(manager, args):
         print(f"  - Remove share '{args.share}' from {SMB_CONF}")
         if args.delete_data:
             print(
-                f"  - DESTROY ZFS dataset: {manager._state.get_item('shares', args.share)['dataset']}"
+                f"  - DESTROY ZFS dataset: {manager._state.get_item('shares', args.share)['dataset']['name']}"
             )
         print("  - Reload Samba configuration")
         print("  - Update state file")
@@ -305,12 +315,30 @@ def cmd_list(manager, args):
         print(f"No {args.type} found.")
         return
 
+    if args.type == "pools":
+        print("--- Primary Pool ---")
+        print(f"  {items['primary_pool']}")
+        print("\n--- Secondary Pools ---")
+        if items['secondary_pools']:
+            for pool in items['secondary_pools']:
+                print(f"  - {pool}")
+        else:
+            print("  None")
+        return
+
     for name, data in items.items():
         print(f"--- {name} ---")
         for key, value in data.items():
-            if isinstance(value, list):
+            if isinstance(value, dict):
+                print(f"  {key.replace('_', ' ').capitalize()}:")
+                for sub_key, sub_value in value.items():
+                    print(
+                        f"    - {sub_key.replace('_', ' ').capitalize()}: {sub_value}")
+            elif isinstance(value, list):
                 value = ", ".join(value) if value else "None"
-            print(f"  {key.replace('_', ' ').capitalize()}: {value}")
+                print(f"  {key.replace('_', ' ').capitalize()}: {value}")
+            else:
+                print(f"  {key.replace('_', ' ').capitalize()}: {value}")
         print()
 
 
@@ -353,7 +381,7 @@ def cmd_remove(manager, args):
                 print(f"    - {share_info['dataset']['name']}")
             for user_info in users.values():
                 print(f"    - {user_info['dataset']['name']}")
-            pool = manager._state.get("zfs_pool")
+            pool = manager._state.get("primary_pool")
             if pool:
                 print(f"    - {pool}/homes")
 
@@ -389,7 +417,10 @@ def main():
         "setup", help="Set up and configure Samba, ZFS, and Avahi."
     )
     p_setup.add_argument(
-        "--pool", required=True, help="The name of the ZFS pool to use."
+        "--primary-pool", required=True, help="The name of the ZFS pool to use for user homes."
+    )
+    p_setup.add_argument(
+        "--secondary-pools", nargs='*', help="Space-separated list of other ZFS pools for shares."
     )
     p_setup.add_argument(
         "--server-name", help="The server's NetBIOS name (default: hostname)."
@@ -446,6 +477,9 @@ def main():
         "--dataset",
         required=True,
         help="The path for the ZFS dataset within the pool (e.g., 'data/projects').",
+    )
+    p_create_share.add_argument(
+        "--pool", help="The ZFS pool to create the share in. Defaults to the primary pool."
     )
     p_create_share.add_argument(
         "--comment", default="", help="A description for the share."
@@ -526,6 +560,8 @@ def main():
     p_modify_share.add_argument(
         "share", help="The name of the share to modify.")
     p_modify_share.add_argument(
+        "--pool", help="Move the share's dataset to a new ZFS pool.")
+    p_modify_share.add_argument(
         "--comment", help="New description for the share.")
     p_modify_share.add_argument(
         "--owner", help="New user who will own the files.")
@@ -547,6 +583,14 @@ def main():
 
     p_modify_setup = modify_sub.add_parser(
         "setup", help="Modify global server configuration.")
+    p_modify_setup.add_argument(
+        "--primary-pool", help="New primary pool. Use with --move-data to migrate existing datasets.")
+    p_modify_setup.add_argument(
+        "--move-data", action="store_true", help="When changing primary-pool, move all relevant datasets.")
+    p_modify_setup.add_argument(
+        "--add-secondary-pools", nargs='*', help="Add new pools for shares.")
+    p_modify_setup.add_argument(
+        "--remove-secondary-pools", nargs='*', help="Remove secondary pools.")
     p_modify_setup.add_argument(
         "--server-name", help="New server NetBIOS name.")
     p_modify_setup.add_argument("--workgroup", help="New workgroup name.")
@@ -619,9 +663,9 @@ def main():
     p_delete_group.set_defaults(func=cmd_delete_group)
 
     p_list = subparsers.add_parser(
-        "list", help="List all managed users, shares, or groups.")
+        "list", help="List all managed users, shares, groups or pools.")
     p_list.add_argument(
-        "type", choices=["users", "shares", "groups"], help="The type of item to list."
+        "type", choices=["users", "shares", "groups", "pools"], help="The type of item to list."
     )
     p_list.set_defaults(func=cmd_list)
 
