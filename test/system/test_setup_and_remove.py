@@ -153,3 +153,42 @@ def test_remove_command(initial_state):
     assert not get_zfs_dataset('primary_testpool/shares')
     with pytest.raises(subprocess.CalledProcessError):
         run_smb_zfs_command("get-state") # Should fail as setup is gone
+
+def test_remove_partial_cleanup(initial_state):
+    """Test remove command with partial cleanup options."""
+    # Create test data
+    run_smb_zfs_command("create user removeuser --password 'TestPassword!' --json")
+    run_smb_zfs_command("create share removeshare --dataset shares/removeshare --json")
+
+    # Remove only users, keep data
+    run_smb_zfs_command("remove --delete-users --yes --json")
+
+    # Users should be gone but datasets should remain
+    assert not get_system_user('removeuser')
+    assert get_zfs_dataset('primary_testpool/homes/removeuser')
+    assert get_zfs_dataset('primary_testpool/shares/removeshare')
+
+def test_remove_data_only():
+    """Test remove command that only removes data."""
+    # Setup fresh environment
+    try:
+        run_smb_zfs_command("remove --delete-users --delete-data --yes")
+    except subprocess.CalledProcessError:
+        pass
+
+    run_smb_zfs_command("setup --primary-pool primary_testpool --secondary-pools secondary_testpool")
+
+    # Create test data
+    run_smb_zfs_command("create user datauser --password 'TestPassword!' --json")
+    run_smb_zfs_command("create share datashare --dataset shares/datashare --json")
+
+    # Remove only data, keep users
+    run_smb_zfs_command("remove --delete-data --yes --json")
+
+    # Users should still exist but datasets should be gone
+    assert get_system_user('datauser')
+    assert not get_zfs_dataset('primary_testpool/homes/datauser')
+    assert not get_zfs_dataset('primary_testpool/shares/datashare')
+
+    # Clean up
+    run_smb_zfs_command("remove --delete-users --yes --json")
