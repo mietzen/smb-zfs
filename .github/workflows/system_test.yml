@@ -1,0 +1,53 @@
+name: System Test
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+jobs:
+  system_test:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: '[Host] Checkout repo'
+        uses: actions/checkout@v4
+      - name: '[Host] Install ZFS'
+        run: |
+          sudo apt-get update
+          sudo apt-get install zfsutils-linux -y
+      - name: '[Host] Setup ZFS Testing Pools'
+        run: |
+          sudo truncate -s 1G /tmp/zfs_test_disk_primary
+          sudo truncate -s 1G /tmp/zfs_test_disk_secondary
+          sudo truncate -s 1G /tmp/zfs_test_disk_tertiary
+          sudo zpool create primary_testpool /tmp/zfs_test_disk_primary
+          sudo zpool create secondary_testpool /tmp/zfs_test_disk_secondary
+          sudo zpool create tertiary_testpool /tmp/zfs_test_disk_tertiary
+      - name: '[Container] Create and start'
+        run: |
+          docker run -d \
+            --name debian \
+            --device /dev/zfs \
+            --privileged \
+            -v $PWD:/workspace \
+            -w /workspace \
+            debian:12 tail -f /dev/null
+      - name: '[Container] Install dependencies'
+        run: |
+          docker exec -i debian bash << 'EOF'
+          sed -i -E '/^Components:/ { /(^| )contrib( |$)/! s/$/ contrib/ }' /etc/apt/sources.list.d/debian.sources
+          apt-get update
+          apt-get install zfsutils-linux -y --no-install-recommends
+          apt-get install git python3 python3-setuptools python3-pip python3-venv samba avahi-daemon -y
+          EOF
+      - name: '[Container] Install smb-zfs'
+        run: |
+          docker exec -i debian bash << 'EOF'
+          python3 -m venv .venv
+          .venv/bin/pip install .
+          EOF
+      - name: '[Container] Start system test'
+        run: |
+          docker exec -i debian bash << 'EOF'
+          source .venv/bin/activate
+          pytest ./test/system
+          EOF
