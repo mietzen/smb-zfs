@@ -52,5 +52,5 @@ jobs:
         run: |
           docker exec -i debian bash << 'EOF'
           source .venv/bin/activate
-          pytest ./test/system
+          pytest -v ./test/system
           EOF
