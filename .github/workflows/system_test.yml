@@ -1,9 +1,10 @@
 name: System Test
+
 on:
   pull_request:
     branches:
       - main
-  workflow_dispatch:
+
 jobs:
   system_test:
     runs-on: ubuntu-24.04
