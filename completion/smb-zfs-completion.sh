@@ -26,11 +26,11 @@ _smb_zfs_completion() {
     _get_comp_words_by_ref -n : cur prev words cword
 
     # Define all possible commands, sub-commands, and global options.
-    local commands="setup create modify list delete passwd remove"
+    local commands="setup create modify list delete passwd remove get-state"
     local create_opts="user share group"
-    local modify_opts="group share setup"
+    local modify_opts="group share setup home"
     local delete_opts="user share group"
-    local list_opts="users shares groups"
+    local list_opts="users shares groups pools"
     local global_opts="-h --help -v --version"
 
     # Completion for the first argument (the main command).
@@ -42,7 +42,7 @@ _smb_zfs_completion() {
     local command="${words[1]}"
     case "${command}" in
         setup)
-            local opts="--pool --server-name --workgroup --macos --dry-run"
+            local opts="--primary-pool --secondary-pools --server-name --workgroup --macos --default-home-quota --dry-run --json"
             COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
             ;;
         create)
@@ -55,15 +55,15 @@ _smb_zfs_completion() {
             local sub_command="${words[2]}"
             case "${sub_command}" in
                 user)
-                    local opts="--password --shell --groups --dry-run"
+                    local opts="--password --shell --groups --no-home --dry-run --json"
                     COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                     ;;
                 share)
-                    local opts="--dataset --comment --owner --group --perms --valid-users --readonly --no-browse --dry-run"
+                    local opts="--dataset --pool --comment --owner --group --perms --valid-users --readonly --no-browse --quota --dry-run --json"
                     COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                     ;;
                 group)
-                    local opts="--description --users --dry-run"
+                    local opts="--description --users --dry-run --json"
                     COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                     ;;
             esac
@@ -75,23 +75,30 @@ _smb_zfs_completion() {
             fi
             local sub_command="${words[2]}"
             case "${sub_command}" in
-                group|share)
+                group|share|home)
                     # Dynamically complete the item name (e.g., the group to modify)
                     if [ "$cword" -eq 3 ]; then
-                        COMPREPLY=( $(compgen -W "$(_get_managed_items ${sub_command}s)" -- "${cur}") )
+                        local item_type="users" # for home
+                        if [ "${sub_command}" != "home" ]; then
+                            item_type="${sub_command}s"
+                        fi
+                        COMPREPLY=( $(compgen -W "$(_get_managed_items ${item_type})" -- "${cur}") )
                         return 0
                     fi
                     # Complete options for the specific modify sub-command
                     if [ "${sub_command}" == "group" ]; then
-                        local opts="--add-users --remove-users --dry-run"
+                        local opts="--add-users --remove-users --dry-run --json"
                         COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                     elif [ "${sub_command}" == "share" ]; then
-                        local opts="--comment --valid-users --readonly --no-browse --perms --owner --group --dry-run"
+                        local opts="--pool --comment --valid-users --readonly --no-browse --perms --owner --group --quota --dry-run --json"
+                        COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                    elif [ "${sub_command}" == "home" ]; then
+                        local opts="--quota --dry-run --json"
                         COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                     fi
                     ;;
                 setup)
-                    local opts="--server-name --workgroup --macos --dry-run"
+                    local opts="--primary-pool --move-data --add-secondary-pools --remove-secondary-pools --server-name --workgroup --macos --default-home-quota --dry-run --json"
                     COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                     ;;
             esac
@@ -113,7 +120,7 @@ _smb_zfs_completion() {
                 return 0
             fi
             # Complete options for delete commands
-            local opts="--delete-data --yes --dry-run"
+            local opts="--delete-data --yes --dry-run --json"
             COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
             ;;
         passwd)
@@ -121,10 +128,18 @@ _smb_zfs_completion() {
             if [ "$cword" -eq 2 ]; then
                 COMPREPLY=( $(compgen -W "$(_get_managed_items users)" -- "${cur}") )
             fi
+             if [ "$cword" -eq 3 ]; then
+                local opts="--json"
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            fi
             ;;
         remove)
-            local opts="--delete-data --delete-users --yes"
+            local opts="--delete-data --delete-users --yes --dry-run --json"
             COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            ;;
+        get-state)
+            # No options for get-state
+            COMPREPLY=()
             ;;
     esac
 

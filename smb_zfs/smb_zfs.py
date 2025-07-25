@@ -55,8 +55,7 @@ class SmbZfsManager:
         added manually to the rollback list.
         """
         rollback_actions = []
-        original_state_data = json.loads(
-            json.dumps(self._state.data))  # Deep copy
+        original_state_data = self._state.get_data_copy()
 
         try:
             yield rollback_actions
@@ -169,7 +168,7 @@ class SmbZfsManager:
                 "created": datetime.utcnow().isoformat(),
             },
         )
-        return "Setup completed successfully."
+        return {"msg": "Setup completed successfully.", "state": self._state.get_data_copy()}
 
     @requires_initialization
     def create_user(self, username, password, allow_shell=False, groups=None, create_home=True):
@@ -251,7 +250,7 @@ class SmbZfsManager:
             # Action: Update state file (handled by transaction manager)
             self._state.set_item("users", username, user_data)
 
-        return f"User '{username}' created successfully."
+        return {"msg": f"User '{username}' created successfully.", "state": self._state.get_data_copy()}
 
     @requires_initialization
     def delete_user(self, username, delete_data=False):
@@ -267,7 +266,7 @@ class SmbZfsManager:
             self._zfs.destroy_dataset(user_info["dataset"]["name"])
 
         self._state.delete_item("users", username)
-        return f"User '{username}' deleted successfully."
+        return {"msg": f"User '{username}' deleted successfully.", "state": self._state.get_data_copy()}
 
     @requires_initialization
     def create_group(self, groupname, description="", members=None):
@@ -300,7 +299,7 @@ class SmbZfsManager:
             }
             self._state.set_item("groups", groupname, group_config)
 
-        return f"Group '{groupname}' created successfully."
+        return {"msg": f"Group '{groupname}' created successfully.", "state": self._state.get_data_copy()}
 
     @requires_initialization
     def delete_group(self, groupname):
@@ -314,7 +313,7 @@ class SmbZfsManager:
             self._system.delete_system_group(groupname)
 
         self._state.delete_item("groups", groupname)
-        return f"Group '{groupname}' deleted successfully."
+        return {"msg": f"Group '{groupname}' deleted successfully.", "state": self._state.get_data_copy()}
 
     @requires_initialization
     def create_share(
@@ -421,7 +420,7 @@ class SmbZfsManager:
             # Action: Update state file
             self._state.set_item("shares", name, share_data)
 
-        return f"Share '{name}' created successfully."
+        return {"msg": f"Share '{name}' created successfully.", "state": self._state.get_data_copy()}
 
     @requires_initialization
     def delete_share(self, name, delete_data=False):
@@ -437,7 +436,7 @@ class SmbZfsManager:
             self._zfs.destroy_dataset(share_info["dataset"]["name"])
 
         self._state.delete_item("shares", name)
-        return f"Share '{name}' deleted successfully."
+        return {"msg": f"Share '{name}' deleted successfully.", "state": self._state.get_data_copy()}
 
     @requires_initialization
     def modify_group(self, groupname, add_users=None, remove_users=None):
@@ -464,7 +463,7 @@ class SmbZfsManager:
 
         group_info["members"] = sorted(list(current_members))
         self._state.set_item("groups", groupname, group_info)
-        return f"Group '{groupname}' modified successfully."
+        return {"msg": f"Group '{groupname}' modified successfully.", "state": self._state.get_data_copy()}
 
     @requires_initialization
     def modify_share(self, share_name, **kwargs):
@@ -473,7 +472,7 @@ class SmbZfsManager:
             raise ItemNotFoundError("share", share_name)
 
         samba_config_changed = False
-        original_share_info = json.loads(json.dumps(share_info))
+        original_share_info = self._state.get_data_copy()['shares'][share_name]
         new_dataset_name = None
 
         try:
@@ -572,11 +571,11 @@ class SmbZfsManager:
                     new_dataset_name, original_share_info['dataset']['name'])
             raise
 
-        return f"Share '{share_name}' modified successfully."
+        return {"msg": f"Share '{share_name}' modified successfully.", "state": self._state.get_data_copy()}
 
     @requires_initialization
     def modify_setup(self, move_data=False, **kwargs):
-        original_state = json.loads(json.dumps(self._state.data))
+        original_state = self._state.get_data_copy()
         config_needs_update = False
 
         try:
@@ -670,7 +669,7 @@ class SmbZfsManager:
                 f"Error during setup modification: {e}. State restored, but filesystem changes might need manual rollback.", file=sys.stderr)
             raise
 
-        return "Global setup modified successfully."
+        return {"msg": "Global setup modified successfully.", "state": self._state.get_data_copy()}
 
     @requires_initialization
     def modify_home(self, username, quota):
@@ -683,7 +682,7 @@ class SmbZfsManager:
         self._zfs.set_quota(home_dataset, new_quota)
         user_info["dataset"]["quota"] = new_quota
         self._state.set_item("users", username, user_info)
-        return f"Quota for user '{username}' has been set to {quota}."
+        return {"msg": f"Quota for user '{username}' has been set to {quota}.", "state": self._state.get_data_copy()}
 
     @requires_initialization
     def change_password(self, username, new_password):
@@ -695,7 +694,12 @@ class SmbZfsManager:
             self._system.set_system_password(username, new_password)
 
         self._system.set_samba_password(username, new_password)
-        return f"Password changed successfully for user '{username}'."
+        return {"msg": f"Password changed successfully for user '{username}'.", "state": self._state.get_data_copy()}
+
+    @requires_initialization
+    def get_state(self):
+        """Returns a copy of the current state data."""
+        return self._state.get_data_copy()
 
     @requires_initialization
     def list_items(self, category):
@@ -711,8 +715,9 @@ class SmbZfsManager:
 
         if category == "users":
             for name, data in items.items():
-                quota = self._zfs.get_quota(data["dataset"]["name"])
-                data["dataset"]["quota"] = quota if quota and quota != 'none' else "Not Set"
+                if "dataset" in data and "name" in data["dataset"]:
+                    quota = self._zfs.get_quota(data["dataset"]["name"])
+                    data["dataset"]["quota"] = quota if quota and quota != 'none' else "Not Set"
 
         if category == "shares":
             for name, data in items.items():
@@ -723,7 +728,7 @@ class SmbZfsManager:
 
     def remove(self, delete_data=False, delete_users_and_groups=False):
         if not self._state.is_initialized():
-            return "System is not set up, nothing to do."
+            return {"msg": "System is not set up, nothing to do.", "state": self._state.get_data_copy()}
 
         primary_pool = self._state.get("primary_pool")
         users = self.list_items("users")
@@ -747,7 +752,8 @@ class SmbZfsManager:
                 if "dataset" in share_info:
                     self._zfs.destroy_dataset(share_info["dataset"]["name"])
             for user_info in users.values():
-                self._zfs.destroy_dataset(user_info["dataset"]["name"])
+                if "dataset" in user_info:
+                    self._zfs.destroy_dataset(user_info["dataset"]["name"])
             if self._zfs.dataset_exists(f"{primary_pool}/homes"):
                 self._zfs.destroy_dataset(f"{primary_pool}/homes")
 
@@ -761,5 +767,8 @@ class SmbZfsManager:
                 except OSError as e:
                     print(
                         f"Warning: could not remove file {f}: {e}", file=sys.stderr)
+        
+        # Manually clear the state since the file is being deleted
+        self._state._initialize_state_file()
 
-        return "Removal completed successfully."
+        return {"msg": "Removal completed successfully.", "state": self._state.get_data_copy()}

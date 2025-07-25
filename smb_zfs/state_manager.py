@@ -84,3 +84,7 @@ class StateManager:
 
     def list_items(self, category):
         return self.data.get(category, {})
+
+    def get_data_copy(self):
+        """Returns a deep copy of the current state data."""
+        return json.loads(json.dumps(self.data))

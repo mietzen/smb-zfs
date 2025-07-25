@@ -101,7 +101,7 @@ def wizard_setup(manager, args=None):
     if prompt_yes_no("Proceed with setup?", default="y"):
         result = manager.setup(
             primary_pool, secondary_pools, server_name, workgroup, macos_optimized, default_home_quota)
-        print(f"\nSuccess: {result}")
+        print(f"\nSuccess: {result['msg']}")
 
 
 @handle_exception
@@ -125,7 +125,7 @@ def wizard_create_user(manager, args=None):
 
     result = manager.create_user(
         username, password, allow_shell, groups, create_home)
-    print(f"\nSuccess: {result}")
+    print(f"\nSuccess: {result['msg']}")
 
 
 @handle_exception
@@ -176,7 +176,7 @@ def wizard_create_share(manager, args=None):
         quota,
         pool
     )
-    print(f"\nSuccess: {result}")
+    print(f"\nSuccess: {result['msg']}")
 
 
 @handle_exception
@@ -193,7 +193,7 @@ def wizard_create_group(manager, args=None):
     users = [u.strip() for u in users_str.split(",")] if users_str else []
 
     result = manager.create_group(group_name, description, users)
-    print(f"\nSuccess: {result}")
+    print(f"\nSuccess: {result['msg']}")
 
 
 @handle_exception
@@ -220,7 +220,7 @@ def wizard_modify_group(manager, args=None):
         return
 
     result = manager.modify_group(group_name, add_users, remove_users)
-    print(f"\nSuccess: {result}")
+    print(f"\nSuccess: {result['msg']}")
 
 
 @handle_exception
@@ -268,7 +268,7 @@ def wizard_modify_share(manager, args=None):
         return
 
     result = manager.modify_share(share_name, **kwargs)
-    print(f"\nSuccess: {result}")
+    print(f"\nSuccess: {result['msg']}")
 
 
 @handle_exception
@@ -333,7 +333,7 @@ def wizard_modify_setup(manager, args=None):
         return
 
     result = manager.modify_setup(move_data=move_data, **final_kwargs)
-    print(f"\nSuccess: {result}")
+    print(f"\nSuccess: {result['msg']}")
 
 
 @handle_exception
@@ -357,7 +357,7 @@ def wizard_modify_home(manager, args=None):
         f"Enter new quota for {username}'s home (e.g., 25G or 'none')", default=current_quota)
 
     result = manager.modify_home(username, new_quota)
-    print(f"\nSuccess: {result}")
+    print(f"\nSuccess: {result['msg']}")
 
 
 @handle_exception
@@ -381,7 +381,7 @@ def wizard_delete_user(manager, args=None):
             return
 
     result = manager.delete_user(username, delete_data)
-    print(f"\nSuccess: {result}")
+    print(f"\nSuccess: {result['msg']}")
 
 
 @handle_exception
@@ -406,7 +406,7 @@ def wizard_delete_share(manager, args=None):
             return
 
     result = manager.delete_share(share_name, delete_data)
-    print(f"\nSuccess: {result}")
+    print(f"\nSuccess: {result['msg']}")
 
 
 @handle_exception
@@ -419,7 +419,7 @@ def wizard_delete_group(manager, args=None):
         return
 
     result = manager.delete_group(group_name)
-    print(f"\nSuccess: {result}")
+    print(f"\nSuccess: {result['msg']}")
 
 
 @handle_exception
@@ -437,7 +437,7 @@ def wizard_remove(manager, args=None):
     message = "This will remove all configurations and potentially all user data and users created by this tool."
     if confirm_destructive_action(message, False):
         result = manager.remove(delete_data, delete_users)
-        print(f"\nSuccess: {result}")
+        print(f"\nSuccess: {result['msg']}")
 
 
 def main():

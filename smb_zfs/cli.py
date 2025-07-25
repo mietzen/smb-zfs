@@ -2,6 +2,7 @@
 
 import argparse
 import getpass
+import json
 import socket
 import sys
 from importlib import metadata
@@ -10,6 +11,14 @@ from .smb_zfs import SmbZfsManager
 from .errors import SmbZfsError
 from .const import NAME, SMB_CONF, AVAHI_SMB_SERVICE
 from .utils import prompt_for_password, confirm_destructive_action, handle_exception, check_root
+
+
+def _handle_output(result, args):
+    """Prints result as JSON or plain text based on args."""
+    if args.json:
+        print(json.dumps(result, indent=2))
+    elif 'msg' in result:
+        print(result['msg'])
 
 
 @handle_exception
@@ -41,21 +50,17 @@ def cmd_setup(manager, args):
 
     result = manager.setup(args.primary_pool, args.secondary_pools, server_name, workgroup,
                            args.macos, args.default_home_quota)
-    print(result)
+    _handle_output(result, args)
 
 
 @handle_exception
 def cmd_create_user(manager, args):
     """Handler for the 'create user' command."""
-    password = args.password or prompt_for_password(args.user)
-    groups = args.groups.split(",") if args.groups else []
-    create_home = not args.no_home
-
     if args.dry_run:
         print("--- Dry Run ---")
         print("Would perform the following actions:")
         print(f"  - Create system user: {args.user}")
-        if create_home:
+        if not args.no_home:
             print(
                 f"  - Create ZFS home dataset: {manager._state.get('primary_pool')}/homes/{args.user}"
             )
@@ -65,15 +70,18 @@ def cmd_create_user(manager, args):
             print("  - Set permissions on home directory")
         print(f"  - Add Samba user: {args.user}")
         print("  - Add user to group 'smb_users'")
-        if groups:
-            print(f"  - Add user to additional groups: {', '.join(groups)}")
+        if args.groups:
+            print(f"  - Add user to additional groups: {args.groups}")
         print("  - Update state file")
         return
 
     check_root()
+    password = args.password or prompt_for_password(args.user)
+    groups = args.groups.split(",") if args.groups else []
+    create_home = not args.no_home
     result = manager.create_user(
         args.user, password, args.shell, groups, create_home)
-    print(result)
+    _handle_output(result, args)
 
 
 @handle_exception
@@ -110,7 +118,7 @@ def cmd_create_share(manager, args):
         quota=args.quota,
         pool=args.pool,
     )
-    print(result)
+    _handle_output(result, args)
 
 
 @handle_exception
@@ -129,7 +137,7 @@ def cmd_create_group(manager, args):
 
     check_root()
     result = manager.create_group(args.group, args.description, users)
-    print(result)
+    _handle_output(result, args)
 
 
 @handle_exception
@@ -149,7 +157,7 @@ def cmd_modify_group(manager, args):
 
     check_root()
     result = manager.modify_group(args.group, add_users, remove_users)
-    print(result)
+    _handle_output(result, args)
 
 
 @handle_exception
@@ -182,7 +190,7 @@ def cmd_modify_share(manager, args):
 
     check_root()
     result = manager.modify_share(args.share, **kwargs)
-    print(result)
+    _handle_output(result, args)
 
 
 @handle_exception
@@ -219,7 +227,7 @@ def cmd_modify_setup(manager, args):
 
     check_root()
     result = manager.modify_setup(move_data=args.move_data, **kwargs)
-    print(result)
+    _handle_output(result, args)
 
 
 @handle_exception
@@ -233,7 +241,7 @@ def cmd_modify_home(manager, args):
 
     check_root()
     result = manager.modify_home(args.user, args.quota)
-    print(result)
+    _handle_output(result, args)
 
 
 @handle_exception
@@ -261,7 +269,7 @@ def cmd_delete_user(manager, args):
 
     check_root()
     result = manager.delete_user(args.user, args.delete_data)
-    print(result)
+    _handle_output(result, args)
 
 
 @handle_exception
@@ -289,7 +297,7 @@ def cmd_delete_share(manager, args):
 
     check_root()
     result = manager.delete_share(args.share, args.delete_data)
-    print(result)
+    _handle_output(result, args)
 
 
 @handle_exception
@@ -304,7 +312,7 @@ def cmd_delete_group(manager, args):
 
     check_root()
     result = manager.delete_group(args.group)
-    print(result)
+    _handle_output(result, args)
 
 
 @handle_exception
@@ -349,7 +357,7 @@ def cmd_passwd(manager, args):
     if getpass.getuser() != args.user:
         check_root()
     result = manager.change_password(args.user, password)
-    print(result)
+    _handle_output(result, args)
 
 
 @handle_exception
@@ -378,9 +386,11 @@ def cmd_remove(manager, args):
         if args.delete_data:
             print("  - DESTROY all managed ZFS datasets:")
             for share_info in shares.values():
-                print(f"    - {share_info['dataset']['name']}")
+                if "dataset" in share_info:
+                    print(f"    - {share_info['dataset']['name']}")
             for user_info in users.values():
-                print(f"    - {user_info['dataset']['name']}")
+                if "dataset" in user_info:
+                    print(f"    - {user_info['dataset']['name']}")
             pool = manager._state.get("primary_pool")
             if pool:
                 print(f"    - {pool}/homes")
@@ -398,7 +408,14 @@ def cmd_remove(manager, args):
 
     check_root()
     result = manager.remove(args.delete_data, args.delete_users)
-    print(result)
+    _handle_output(result, args)
+
+
+@handle_exception
+def cmd_get_state(manager, args):
+    """Handler for the 'get-state' command."""
+    state = manager.get_state()
+    print(json.dumps(state, indent=2))
 
 
 def main():
@@ -439,6 +456,9 @@ def main():
         action="store_true",
         help="Don't change anything just summarize the changes",
     )
+    p_setup.add_argument(
+        "--json", action="store_true", help="Output result as a JSON object."
+    )
     p_setup.set_defaults(func=cmd_setup)
 
     p_create = subparsers.add_parser(
@@ -468,6 +488,9 @@ def main():
         "--dry-run",
         action="store_true",
         help="Don't change anything just summarize the changes",
+    )
+    p_create_user.add_argument(
+        "--json", action="store_true", help="Output result as a JSON object."
     )
     p_create_user.set_defaults(func=cmd_create_user)
 
@@ -521,6 +544,9 @@ def main():
         action="store_true",
         help="Don't change anything just summarize the changes",
     )
+    p_create_share.add_argument(
+        "--json", action="store_true", help="Output result as a JSON object."
+    )
     p_create_share.set_defaults(func=cmd_create_share)
 
     p_create_group = create_sub.add_parser("group", help="Create a new group.")
@@ -535,6 +561,9 @@ def main():
         "--dry-run",
         action="store_true",
         help="Don't change anything just summarize the changes",
+    )
+    p_create_group.add_argument(
+        "--json", action="store_true", help="Output result as a JSON object."
     )
     p_create_group.set_defaults(func=cmd_create_group)
 
@@ -553,6 +582,9 @@ def main():
         "--remove-users", help="Comma-separated list of users to remove.")
     p_modify_group.add_argument('--dry-run', action='store_true',
                                 help="Don't change anything just summarize the changes")
+    p_modify_group.add_argument(
+        "--json", action="store_true", help="Output result as a JSON object."
+    )
     p_modify_group.set_defaults(func=cmd_modify_group)
 
     p_modify_share = modify_sub.add_parser(
@@ -579,6 +611,9 @@ def main():
         "--quota", help="New ZFS quota for the share (e.g., 200G). Use 'none' to remove.")
     p_modify_share.add_argument('--dry-run', action='store_true',
                                 help="Don't change anything just summarize the changes")
+    p_modify_share.add_argument(
+        "--json", action="store_true", help="Output result as a JSON object."
+    )
     p_modify_share.set_defaults(func=cmd_modify_share)
 
     p_modify_setup = modify_sub.add_parser(
@@ -600,6 +635,9 @@ def main():
         "--default-home-quota", help="New default quota for user homes (e.g., 50G). Use 'none' to remove.")
     p_modify_setup.add_argument('--dry-run', action='store_true',
                                 help="Don't change anything just summarize the changes")
+    p_modify_setup.add_argument(
+        "--json", action="store_true", help="Output result as a JSON object."
+    )
     p_modify_setup.set_defaults(func=cmd_modify_setup)
 
     p_modify_home = modify_sub.add_parser(
@@ -609,6 +647,9 @@ def main():
         "--quota", required=True, help="The new quota for the home directory (e.g., 20G). Use 'none' to remove.")
     p_modify_home.add_argument('--dry-run', action='store_true',
                                help="Don't change anything just summarize the changes")
+    p_modify_home.add_argument(
+        "--json", action="store_true", help="Output result as a JSON object."
+    )
     p_modify_home.set_defaults(func=cmd_modify_home)
 
     p_delete = subparsers.add_parser(
@@ -632,6 +673,9 @@ def main():
         action="store_true",
         help="Don't change anything just summarize the changes",
     )
+    p_delete_user.add_argument(
+        "--json", action="store_true", help="Output result as a JSON object."
+    )
     p_delete_user.set_defaults(func=cmd_delete_user)
 
     p_delete_share = delete_sub.add_parser("share", help="Delete a share.")
@@ -651,6 +695,9 @@ def main():
         action="store_true",
         help="Don't change anything just summarize the changes",
     )
+    p_delete_share.add_argument(
+        "--json", action="store_true", help="Output result as a JSON object."
+    )
     p_delete_share.set_defaults(func=cmd_delete_share)
 
     p_delete_group = delete_sub.add_parser("group", help="Delete a group.")
@@ -659,6 +706,9 @@ def main():
         "--dry-run",
         action="store_true",
         help="Don't change anything just summarize the changes",
+    )
+    p_delete_group.add_argument(
+        "--json", action="store_true", help="Output result as a JSON object."
     )
     p_delete_group.set_defaults(func=cmd_delete_group)
 
@@ -672,6 +722,9 @@ def main():
     p_passwd = subparsers.add_parser(
         "passwd", help="Change a user's Samba password.")
     p_passwd.add_argument("user", help="The user whose password to change.")
+    p_passwd.add_argument(
+        "--json", action="store_true", help="Output result as a JSON object."
+    )
     p_passwd.set_defaults(func=cmd_passwd)
 
     p_remove = subparsers.add_parser(
@@ -697,7 +750,15 @@ def main():
         action="store_true",
         help="Don't change anything just summarize the changes",
     )
+    p_remove.add_argument(
+        "--json", action="store_true", help="Output result as a JSON object."
+    )
     p_remove.set_defaults(func=cmd_remove)
+
+    p_get_state = subparsers.add_parser(
+        "get-state", help="Print the current state as JSON."
+    )
+    p_get_state.set_defaults(func=cmd_get_state)
 
     args = parser.parse_args()
 
