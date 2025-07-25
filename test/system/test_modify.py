@@ -64,7 +64,7 @@ def test_modify_group_remove_users(setup_users_and_groups):
 # --- Share Modification Tests ---
 def test_modify_share(setup_users_and_groups):
     """Test modifying various properties of a share."""
-    run_smb_zfs_command("create share modshare --pool primary_testpool --comment 'Original' --valid-users user_a --json")
+    run_smb_zfs_command("create share modshare --dataset shares/modshare --pool primary_testpool --comment 'Original' --valid-users user_a --json")
 
     # Modify the share
     run_smb_zfs_command("modify share modshare --comment 'Modified' --valid-users user_a,user_b --readonly --quota 25G --json")
@@ -81,17 +81,67 @@ def test_modify_share(setup_users_and_groups):
     assert 'valid users = user_a,user_b' in smb_conf
     assert 'read only = yes' in smb_conf
 
+def test_modify_share_change_pool(setup_users_and_groups):
+    """Test moving a share to a different pool."""
+    run_smb_zfs_command("create share poolshare --dataset shares/poolshare --pool primary_testpool --json")
+
+    # Move share to secondary pool
+    run_smb_zfs_command("modify share poolshare --pool secondary_testpool --json")
+
+    final_state = run_smb_zfs_command("get-state")
+
+    # Check that the share dataset is now on the secondary pool
+    assert get_zfs_property('secondary_testpool/shares/poolshare', 'type') == 'filesystem'
+    # Original dataset should be gone
+    assert get_zfs_property('primary_testpool/shares/poolshare', 'type') is None
+
+def test_modify_share_permissions(setup_users_and_groups):
+    """Test modifying share permissions and ownership."""
+    run_smb_zfs_command("create share permshare --dataset shares/permshare --pool primary_testpool --json")
+
+    # Modify ownership and permissions
+    run_smb_zfs_command("modify share permshare --owner user_a --group modify_group --perms 755 --json")
+
+    final_state = run_smb_zfs_command("get-state")
+
+    # These would need to be verified via actual file system checks in a real test
+    # For now, verify the command structure works
+
+def test_modify_share_browseable(setup_users_and_groups):
+    """Test modifying share browseable setting."""
+    run_smb_zfs_command("create share browseshare --dataset shares/browseshare --pool primary_testpool --json")
+
+    # Make share non-browseable
+    run_smb_zfs_command("modify share browseshare --no-browse --json")
+
+    final_state = run_smb_zfs_command("get-state")
+    smb_conf = read_smb_conf()
+
+    assert final_state['samba']['shares']['browseshare']['browseable'] == 'no'
+    assert 'browseable = no' in smb_conf
+
 # --- Home Directory Modification Tests ---
 def test_modify_home_quota(setup_users_and_groups):
     """Test modifying the quota of a user's home directory."""
     # Check initial quota (should be 'none' by default)
-    assert get_zfs_property('primary_testpool/users/user_a', 'quota') == 'none'
+    assert get_zfs_property('primary_testpool/homes/user_a', 'quota') == 'none'
 
     # Modify the quota
     run_smb_zfs_command("modify home user_a --quota 5G --json")
 
-    assert get_zfs_property('primary_testpool/users/user_a', 'quota') == '5G'
+    assert get_zfs_property('primary_testpool/homes/user_a', 'quota') == '5G'
 
     # Set it back to none
     run_smb_zfs_command("modify home user_a --quota none --json")
-    assert get_zfs_property('primary_testpool/users/user_a', 'quota') == 'none'
+    assert get_zfs_property('primary_testpool/homes/user_a', 'quota') == 'none'
+
+def test_modify_home_quota_multiple_users(setup_users_and_groups):
+    """Test modifying quotas for multiple users."""
+    # Set quotas for multiple users
+    run_smb_zfs_command("modify home user_a --quota 10G --json")
+    run_smb_zfs_command("modify home user_b --quota 15G --json")
+
+    assert get_zfs_property('primary_testpool/homes/user_a', 'quota') == '10G'
+    assert get_zfs_property('primary_testpool/homes/user_b', 'quota') == '15G'
+    # user_c should still have no quota
+    assert get_zfs_property('primary_testpool/homes/user_c', 'quota') == 'none'

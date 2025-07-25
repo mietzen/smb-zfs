@@ -5,7 +5,7 @@ import json
 def run_smb_zfs_command(command):
     """Helper function to run smb-zfs commands."""
     try:
-        # The get-state command is a special case; it always returns JSON without a flag.
+        # The get-state command always returns JSON without a flag.
         is_json_output = "--json" in command or command.strip().startswith("get-state")
 
         result = subprocess.run(
@@ -38,7 +38,7 @@ def manage_smb_zfs_environment():
         # Ignore errors if it's already clean
         pass
 
-    # Setup smb-zfs. Corrected: The 'setup' command does not have a '--yes' flag.
+    # Setup smb-zfs. The 'setup' command does not have a '--yes' flag.
     run_smb_zfs_command("setup --primary-pool primary_testpool --secondary-pools secondary_testpool tertiary_testpool --server-name TESTSERVER --workgroup TESTGROUP")
 
     yield
