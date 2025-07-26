@@ -1,6 +1,5 @@
 import pytest
 import subprocess
-import json
 from conftest import run_smb_zfs_command
 
 def get_system_user_details(username):

@@ -54,6 +54,17 @@ jobs:
       - name: '[Container] Start system test'
         run: |
           docker exec -i debian bash << 'EOF'
+          export CI=1
+          export BUILD_NUMBER=
           source .venv/bin/activate
-          pytest -v ./test/system
+          pytest -vv ./test/system --junit-xml=system-test-results.xml
           EOF
+      - name: Surface failing tests
+        if: always()
+        uses: pmeier/pytest-results-action@main
+        with:
+          path: system-test-results.xml
+          summary: true
+          display-options: fEX
+          fail-on-empty: true
+          title: System test results
