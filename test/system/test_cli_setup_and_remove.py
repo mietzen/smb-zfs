@@ -1,28 +1,14 @@
 import pytest
 import subprocess
-from conftest import run_smb_zfs_command
+from conftest import (
+    run_smb_zfs_command,
+    get_system_user_exists,
+    get_zfs_dataset_exists,
+    read_smb_conf
+)
 
-def get_system_user(username):
-    """Check if a system user exists."""
-    try:
-        subprocess.run(f"getent passwd {username}", shell=True, check=True, capture_output=True)
-        return True
-    except subprocess.CalledProcessError:
-        return False
 
-def get_zfs_dataset(dataset):
-    """Check if a ZFS dataset exists."""
-    try:
-        subprocess.run(f"zfs list {dataset}", shell=True, check=True, capture_output=True)
-        return True
-    except subprocess.CalledProcessError:
-        return False
-
-def read_smb_conf():
-    """Read the contents of the smb.conf file."""
-    with open('/etc/samba/smb.conf', 'r') as f:
-        return f.read()
-
+# --- Initial Setup State Tests ---
 def test_initial_setup_state(initial_state):
     """Verify the state after the initial setup in the fixture."""
     assert initial_state['zfs']['pools']['primary'] == 'primary_testpool'
@@ -30,12 +16,13 @@ def test_initial_setup_state(initial_state):
     assert 'tertiary_testpool' in initial_state['zfs']['pools']['secondary']
     assert initial_state['samba']['global']['workgroup'] == 'TESTGROUP'
     assert initial_state['samba']['global']['server string'] == 'TESTSERVER'
-    assert get_zfs_dataset('primary_testpool/homes')
-    assert get_zfs_dataset('primary_testpool/shares')
-    assert get_zfs_dataset('secondary_testpool/homes')
-    assert get_zfs_dataset('secondary_testpool/shares')
-    assert get_zfs_dataset('tertiary_testpool/homes')
-    assert get_zfs_dataset('tertiary_testpool/shares')
+    assert get_zfs_dataset_exists('primary_testpool/homes')
+    assert get_zfs_dataset_exists('primary_testpool/shares')
+    assert get_zfs_dataset_exists('secondary_testpool/homes')
+    assert get_zfs_dataset_exists('secondary_testpool/shares')
+    assert get_zfs_dataset_exists('tertiary_testpool/homes')
+    assert get_zfs_dataset_exists('tertiary_testpool/shares')
+
 
 def test_setup_with_options():
     """Test setup command with various options."""
@@ -47,7 +34,8 @@ def test_setup_with_options():
         pass
 
     # Test setup with macOS optimization and default quota
-    run_smb_zfs_command("setup --primary-pool primary_testpool --secondary-pools secondary_testpool --server-name MACSERVER --workgroup MACGROUP --macos --default-home-quota 20G")
+    run_smb_zfs_command(
+        "setup --primary-pool primary_testpool --secondary-pools secondary_testpool --server-name MACSERVER --workgroup MACGROUP --macos --default-home-quota 20G")
 
     state = run_smb_zfs_command("get-state")
     smb_conf = read_smb_conf()
@@ -60,34 +48,24 @@ def test_setup_with_options():
     # Clean up after test
     run_smb_zfs_command("remove --delete-users --delete-data --yes")
 
-def test_modify_setup_add_secondary_pool(initial_state):
-    """Test modifying setup to add a new secondary pool."""
-    # Note: This assumes a fourth pool exists for testing
-    # In a real environment, you'd need to create or mock this
-    initial_secondary_pools = set(initial_state['zfs']['pools']['secondary'])
 
-    # For this test, we'll verify the current state
-    assert 'secondary_testpool' in initial_state['zfs']['pools']['secondary']
-    assert 'tertiary_testpool' in initial_state['zfs']['pools']['secondary']
-
-    # If we had a fourth pool available:
-    # run_smb_zfs_command("modify setup --add-secondary-pools fourth_testpool --json")
-    # final_state = run_smb_zfs_command("get-state")
-    # assert 'fourth_testpool' in final_state['zfs']['pools']['secondary']
-
+# --- Setup Modification Tests ---
 def test_modify_setup_remove_secondary_pool(initial_state):
     """Test modifying setup to remove a secondary pool."""
-    run_smb_zfs_command("modify setup --remove-secondary-pools tertiary_testpool --json")
+    run_smb_zfs_command(
+        "modify setup --remove-secondary-pools tertiary_testpool --json")
     final_state = run_smb_zfs_command("get-state")
 
     assert 'tertiary_testpool' not in final_state['zfs']['pools']['secondary']
     assert 'secondary_testpool' in final_state['zfs']['pools']['secondary']
-    assert not get_zfs_dataset('tertiary_testpool/homes')
-    assert not get_zfs_dataset('tertiary_testpool/shares')
+    assert not get_zfs_dataset_exists('tertiary_testpool/homes')
+    assert not get_zfs_dataset_exists('tertiary_testpool/shares')
+
 
 def test_modify_setup_change_server_settings(initial_state):
     """Test changing server name and workgroup."""
-    run_smb_zfs_command("modify setup --server-name NEWSERVER --workgroup NEWGROUP --json")
+    run_smb_zfs_command(
+        "modify setup --server-name NEWSERVER --workgroup NEWGROUP --json")
     final_state = run_smb_zfs_command("get-state")
     smb_conf_content = read_smb_conf()
 
@@ -96,19 +74,23 @@ def test_modify_setup_change_server_settings(initial_state):
     assert 'workgroup = NEWGROUP' in smb_conf_content
     assert 'server string = NEWSERVER' in smb_conf_content
 
+
 def test_modify_setup_change_primary_pool(initial_state):
     """Test changing the primary pool with data migration."""
     # Create a user first to have data to migrate
-    run_smb_zfs_command("create user migrateuser --password 'TestPassword!' --json")
+    run_smb_zfs_command(
+        "create user migrateuser --password 'TestPassword!' --json")
 
     # Change primary pool with data migration
-    run_smb_zfs_command("modify setup --primary-pool secondary_testpool --move-data --json")
+    run_smb_zfs_command(
+        "modify setup --primary-pool secondary_testpool --move-data --json")
 
     final_state = run_smb_zfs_command("get-state")
 
     assert final_state['zfs']['pools']['primary'] == 'secondary_testpool'
     # User data should now be on the new primary pool
-    assert get_zfs_dataset('secondary_testpool/homes/migrateuser')
+    assert get_zfs_dataset_exists('secondary_testpool/homes/migrateuser')
+
 
 def test_modify_setup_macos_toggle(initial_state):
     """Test toggling macOS optimization."""
@@ -124,49 +106,58 @@ def test_modify_setup_macos_toggle(initial_state):
     run_smb_zfs_command("modify setup --no-macos --json")
     final_state = run_smb_zfs_command("get-state")
 
+
 def test_modify_setup_default_home_quota(initial_state):
     """Test changing default home quota."""
     run_smb_zfs_command("modify setup --default-home-quota 50G --json")
     final_state = run_smb_zfs_command("get-state")
 
     # New users should get the default quota
-    run_smb_zfs_command("create user quotauser --password 'TestPassword!' --json")
+    run_smb_zfs_command(
+        "create user quotauser --password 'TestPassword!' --json")
 
     # Check that the quota was applied (this depends on implementation)
     # In a real test, you'd verify the ZFS quota was set
 
-def test_remove_command(initial_state):
+
+# --- Remove Command Tests ---
+def test_remove_command_complete(initial_state):
     """
     Test the remove command. This is implicitly tested by the teardown fixture,
     but we can have an explicit test too.
     """
     # Create a user to ensure there's something to delete
-    run_smb_zfs_command("create user testuser --password TestPassword123 --json")
-    assert get_system_user('testuser')
+    run_smb_zfs_command(
+        "create user testuser --password TestPassword123 --json")
+    assert get_system_user_exists('testuser')
 
     # Run remove
     run_smb_zfs_command("remove --delete-users --delete-data --yes --json")
 
     # Verify cleanup
-    assert not get_system_user('testuser')
-    assert not get_zfs_dataset('primary_testpool/homes')
-    assert not get_zfs_dataset('primary_testpool/shares')
+    assert not get_system_user_exists('testuser')
+    assert not get_zfs_dataset_exists('primary_testpool/homes')
+    assert not get_zfs_dataset_exists('primary_testpool/shares')
     with pytest.raises(subprocess.CalledProcessError):
-        run_smb_zfs_command("get-state") # Should fail as setup is gone
+        run_smb_zfs_command("get-state")  # Should fail as setup is gone
+
 
 def test_remove_partial_cleanup(initial_state):
     """Test remove command with partial cleanup options."""
     # Create test data
-    run_smb_zfs_command("create user removeuser --password 'TestPassword!' --json")
-    run_smb_zfs_command("create share removeshare --dataset shares/removeshare --json")
+    run_smb_zfs_command(
+        "create user removeuser --password 'TestPassword!' --json")
+    run_smb_zfs_command(
+        "create share removeshare --dataset shares/removeshare --json")
 
     # Remove only users, keep data
     run_smb_zfs_command("remove --delete-users --yes --json")
 
     # Users should be gone but datasets should remain
-    assert not get_system_user('removeuser')
-    assert get_zfs_dataset('primary_testpool/homes/removeuser')
-    assert get_zfs_dataset('primary_testpool/shares/removeshare')
+    assert not get_system_user_exists('removeuser')
+    assert get_zfs_dataset_exists('primary_testpool/homes/removeuser')
+    assert get_zfs_dataset_exists('primary_testpool/shares/removeshare')
+
 
 def test_remove_data_only():
     """Test remove command that only removes data."""
@@ -176,19 +167,22 @@ def test_remove_data_only():
     except subprocess.CalledProcessError:
         pass
 
-    run_smb_zfs_command("setup --primary-pool primary_testpool --secondary-pools secondary_testpool")
+    run_smb_zfs_command(
+        "setup --primary-pool primary_testpool --secondary-pools secondary_testpool")
 
     # Create test data
-    run_smb_zfs_command("create user datauser --password 'TestPassword!' --json")
-    run_smb_zfs_command("create share datashare --dataset shares/datashare --json")
+    run_smb_zfs_command(
+        "create user datauser --password 'TestPassword!' --json")
+    run_smb_zfs_command(
+        "create share datashare --dataset shares/datashare --json")
 
     # Remove only data, keep users
     run_smb_zfs_command("remove --delete-data --yes --json")
 
     # Users should still exist but datasets should be gone
-    assert get_system_user('datauser')
-    assert not get_zfs_dataset('primary_testpool/homes/datauser')
-    assert not get_zfs_dataset('primary_testpool/shares/datashare')
+    assert get_system_user_exists('datauser')
+    assert not get_zfs_dataset_exists('primary_testpool/homes/datauser')
+    assert not get_zfs_dataset_exists('primary_testpool/shares/datashare')
 
     # Clean up
     run_smb_zfs_command("remove --delete-users --yes --json")
