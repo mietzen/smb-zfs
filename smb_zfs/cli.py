@@ -175,6 +175,7 @@ def cmd_modify_share(manager, args):
 
     if args.no_browse is not None:
         kwargs['browseable'] = not args.no_browse
+        print(f"DEBUG: args.no_browse={args.no_browse}, setting browseable={not args.no_browse}")
 
     if args.readonly is not None:
         kwargs['read_only'] = args.readonly
