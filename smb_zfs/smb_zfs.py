@@ -549,10 +549,10 @@ class SmbZfsManager:
                             raise ItemNotFoundError("user", item_name)
                 share_info['smb_config']['valid_users'] = kwargs['valid_users']
                 samba_config_changed = True
-            if 'read_only' in kwargs and kwargs['read_only'] is not False:
+            if 'read_only' in kwargs:
                 share_info['smb_config']['read_only'] = kwargs['read_only']
                 samba_config_changed = True
-            if 'browseable' in kwargs and kwargs['browseable'] is not False:
+            if 'browseable' in kwargs:
                 share_info['smb_config']['browseable'] = kwargs['browseable']
                 samba_config_changed = True
 

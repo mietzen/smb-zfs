@@ -166,14 +166,19 @@ def cmd_modify_share(manager, args):
     kwargs = {
         'comment': args.comment,
         'valid_users': args.valid_users,
-        'read_only': args.readonly,
-        'browseable': not args.no_browse,
         'permissions': args.perms,
         'owner': args.owner,
         'group': args.group,
         'quota': args.quota,
         'pool': args.pool,
     }
+
+    if args.no_browse is not None:
+        kwargs['browseable'] = not args.no_browse
+
+    if args.readonly is not None:
+        kwargs['read_only'] = args.readonly
+
     # Filter out unset arguments
     kwargs = {k: v for k, v in kwargs.items() if v is not None}
 
