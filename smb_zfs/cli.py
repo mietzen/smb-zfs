@@ -167,7 +167,7 @@ def cmd_modify_share(manager, args):
         'comment': args.comment,
         'valid_users': args.valid_users,
         'read_only': args.readonly,
-        'browseable': not args.no_browse if args.no_browse is not None else None,
+        'browseable': not args.no_browse,
         'permissions': args.perms,
         'owner': args.owner,
         'group': args.group,
