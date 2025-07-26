@@ -98,8 +98,8 @@ def test_share_permission_combinations(initial_state):
     state = run_smb_zfs_command("get-state")
 
     assert 'mixed_perms' in state['shares']
-    assert state['shares']['readonly_share']['read only'] == 'yes'
-    assert state['shares']['hidden_share']['browseable'] == 'no'
+    assert state['shares']['readonly_share']['smb_config']['read_only'] == 'yes'
+    assert state['shares']['hidden_share']['smb_config']['browseable'] == 'no'
 
 
 # --- Quota Format and Edge Case Tests ---
@@ -255,7 +255,7 @@ def test_multiple_operations_sequence(initial_state):
     assert 'workflow_user' in final_state['users']
     assert 'workflow_group' in final_state['groups']
     assert 'workflow_share' in final_state['shares']
-    assert final_state['shares']['workflow_share']['comment'] == 'Modified workflow share'
+    assert final_state['shares']['workflow_share']['smb_config']['comment'] == 'Modified workflow share'
     assert get_zfs_property(
         'primary_testpool/shares/workflow_share', 'quota') == '15G'
     assert get_zfs_property(
@@ -271,7 +271,7 @@ def test_modify_share_boolean_flags(initial_state):
     # Test enabling readonly
     run_smb_zfs_command("modify share bool_share --readonly --json")
     state = run_smb_zfs_command("get-state")
-    assert state['shares']['bool_share']['read only'] == 'yes'
+    assert state['shares']['bool_share']['smb_config']['read_only'] == 'yes'
 
     # Test disabling readonly (using --no-readonly if supported, or opposite flag)
     run_smb_zfs_command("modify share bool_share --json")  # Reset to default
@@ -279,7 +279,7 @@ def test_modify_share_boolean_flags(initial_state):
     # Test enabling no-browse
     run_smb_zfs_command("modify share bool_share --no-browse --json")
     state = run_smb_zfs_command("get-state")
-    assert state['shares']['bool_share']['browseable'] == 'no'
+    assert state['shares']['bool_share']['smb_config']['browseable'] == 'no'
 
 
 def test_modify_setup_boolean_variations(initial_state):
@@ -458,8 +458,8 @@ def test_smb_conf_consistency(initial_state):
     share_config = state['shares']['conf_share']
 
     assert f"[conf_share]" in smb_conf
-    assert f"comment = {share_config['comment']}" in smb_conf
-    assert f"read only = {share_config['read only']}" in smb_conf
+    assert f"comment = {share_config['smb_config']['comment']}" in smb_conf
+    assert f"read only = {share_config['smb_config']['read_only']}" in smb_conf
 
     # Modify share and verify consistency
     run_smb_zfs_command(

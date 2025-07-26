@@ -107,9 +107,9 @@ def test_share_with_complex_permissions(comprehensive_setup):
     smb_conf = read_smb_conf()
 
     assert 'complex_share' in state['shares']
-    assert 'comp_user1' in state['shares']['complex_share']['valid users']
-    assert '@comp_group1' in state['shares']['complex_share']['valid users']
-    assert 'comp_user3' in state['shares']['complex_share']['valid users']
+    assert 'comp_user1' in state['shares']['complex_share']['smb_config']['valid_users']
+    assert '@comp_group1' in state['shares']['complex_share']['smb_config']['valid_users']
+    assert 'comp_user3' in state['shares']['complex_share']['smb_config']['valid_users']
 
 
 def test_quota_operations(comprehensive_setup):
@@ -158,11 +158,11 @@ def test_modify_share_all_options(comprehensive_setup):
     smb_conf = read_smb_conf()
 
     share_config = state['shares']['modify_all']
-    assert share_config['comment'] == 'Fully modified share'
-    assert share_config['read only'] == 'yes'
-    assert share_config['browseable'] == 'no'
-    assert 'comp_user1' in share_config['valid users']
-    assert 'comp_user2' in share_config['valid users']
+    assert share_config['smb_config']['comment'] == 'Fully modified share'
+    assert share_config['smb_config']['read_only'] == 'yes'
+    assert share_config['smb_config']['browseable'] == 'no'
+    assert 'comp_user1' in share_config['smb_config']['valid_users']
+    assert 'comp_user2' in share_config['smb_config']['valid_users']
 
     assert get_zfs_property(
         'primary_testpool/shares/modify_all', 'quota') == '30G'
@@ -240,7 +240,7 @@ def test_long_descriptions_and_comments(comprehensive_setup):
 
     state = run_smb_zfs_command("get-state")
     assert state['groups']['long_desc_group']['description'] == long_description
-    assert state['shares']['long_comment_share']['comment'] == long_description
+    assert state['shares']['long_comment_share']['smb_config']['comment'] == long_description
 
 
 # --- State Consistency Tests ---

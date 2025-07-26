@@ -230,9 +230,9 @@ def test_modify_share_basic_properties(basic_users_and_groups):
     final_state = run_smb_zfs_command("get-state")
     smb_conf = read_smb_conf()
 
-    assert final_state['shares']['modshare']['comment'] == 'Modified'
-    assert 'user_b' in final_state['shares']['modshare']['valid users']
-    assert final_state['shares']['modshare']['read only'] == 'yes'
+    assert final_state['shares']['modshare']['smb_config']['comment'] == 'Modified'
+    assert 'user_b' in final_state['shares']['modshare']['smb_config']['valid_users']
+    assert final_state['shares']['modshare']['smb_config']['read_only'] == 'yes'
     assert get_zfs_property(
         'primary_testpool/shares/modshare', 'quota') == '25G'
 
@@ -286,7 +286,7 @@ def test_modify_share_browseable(basic_users_and_groups):
     final_state = run_smb_zfs_command("get-state")
     smb_conf = read_smb_conf()
 
-    assert final_state['shares']['browseshare']['browseable'] == 'no'
+    assert final_state['shares']['browseshare']['smb_config']['browseable'] == 'no'
     assert 'browseable = no' in smb_conf
 
 
