@@ -14,8 +14,8 @@ def test_initial_setup_state(initial_state):
     assert initial_state['zfs']['pools']['primary'] == 'primary_testpool'
     assert 'secondary_testpool' in initial_state['zfs']['pools']['secondary']
     assert 'tertiary_testpool' in initial_state['zfs']['pools']['secondary']
-    assert initial_state['samba']['global']['workgroup'] == 'TESTGROUP'
-    assert initial_state['samba']['global']['server string'] == 'TESTSERVER'
+    assert initial_state['workgroup'] == 'TESTGROUP'
+    assert initial_state['server_name'] == 'TESTSERVER'
     assert get_zfs_dataset_exists('primary_testpool/homes')
     assert get_zfs_dataset_exists('primary_testpool/shares')
     assert get_zfs_dataset_exists('secondary_testpool/homes')
@@ -40,8 +40,8 @@ def test_setup_with_options():
     state = run_smb_zfs_command("get-state")
     smb_conf = read_smb_conf()
 
-    assert state['samba']['global']['workgroup'] == 'MACGROUP'
-    assert state['samba']['global']['server string'] == 'MACSERVER'
+    assert state['workgroup'] == 'MACGROUP'
+    assert state['server_name'] == 'MACSERVER'
     assert 'workgroup = MACGROUP' in smb_conf
     assert 'server string = MACSERVER' in smb_conf
 
@@ -69,8 +69,8 @@ def test_modify_setup_change_server_settings(initial_state):
     final_state = run_smb_zfs_command("get-state")
     smb_conf_content = read_smb_conf()
 
-    assert final_state['samba']['global']['workgroup'] == 'NEWGROUP'
-    assert final_state['samba']['global']['server string'] == 'NEWSERVER'
+    assert final_state['workgroup'] == 'NEWGROUP'
+    assert final_state['server_name'] == 'NEWSERVER'
     assert 'workgroup = NEWGROUP' in smb_conf_content
     assert 'server string = NEWSERVER' in smb_conf_content
 

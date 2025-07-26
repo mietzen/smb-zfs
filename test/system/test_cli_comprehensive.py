@@ -106,10 +106,10 @@ def test_share_with_complex_permissions(comprehensive_setup):
     state = run_smb_zfs_command("get-state")
     smb_conf = read_smb_conf()
 
-    assert 'complex_share' in state['samba']['shares']
-    assert 'comp_user1' in state['samba']['shares']['complex_share']['valid users']
-    assert '@comp_group1' in state['samba']['shares']['complex_share']['valid users']
-    assert 'comp_user3' in state['samba']['shares']['complex_share']['valid users']
+    assert 'complex_share' in state['shares']
+    assert 'comp_user1' in state['shares']['complex_share']['valid users']
+    assert '@comp_group1' in state['shares']['complex_share']['valid users']
+    assert 'comp_user3' in state['shares']['complex_share']['valid users']
 
 
 def test_quota_operations(comprehensive_setup):
@@ -157,7 +157,7 @@ def test_modify_share_all_options(comprehensive_setup):
     state = run_smb_zfs_command("get-state")
     smb_conf = read_smb_conf()
 
-    share_config = state['samba']['shares']['modify_all']
+    share_config = state['shares']['modify_all']
     assert share_config['comment'] == 'Fully modified share'
     assert share_config['read only'] == 'yes'
     assert share_config['browseable'] == 'no'
@@ -177,8 +177,8 @@ def test_modify_setup_all_options(comprehensive_setup):
     state = run_smb_zfs_command("get-state")
     smb_conf = read_smb_conf()
 
-    assert state['samba']['global']['server string'] == 'FULLTEST'
-    assert state['samba']['global']['workgroup'] == 'FULLGROUP'
+    assert state['server_name'] == 'FULLTEST'
+    assert state['workgroup'] == 'FULLGROUP'
     assert 'server string = FULLTEST' in smb_conf
     assert 'workgroup = FULLGROUP' in smb_conf
 
@@ -240,7 +240,7 @@ def test_long_descriptions_and_comments(comprehensive_setup):
 
     state = run_smb_zfs_command("get-state")
     assert state['groups']['long_desc_group']['description'] == long_description
-    assert state['samba']['shares']['long_comment_share']['comment'] == long_description
+    assert state['shares']['long_comment_share']['comment'] == long_description
 
 
 # --- State Consistency Tests ---
@@ -260,10 +260,10 @@ def test_state_consistency_after_operations(comprehensive_setup):
 
     # Verify state consistency
     assert 'state_test' in final_state['users']
-    assert 'state_share' in final_state['samba']['shares']
+    assert 'state_share' in final_state['shares']
     assert len(final_state['users']) == len(initial_state['users']) + 1
-    assert len(final_state['samba']['shares']) == len(
-        initial_state['samba']['shares']) + 1
+    assert len(final_state['shares']) == len(
+        initial_state['shares']) + 1
 
 
 def test_cleanup_operations(comprehensive_setup):
@@ -279,7 +279,7 @@ def test_cleanup_operations(comprehensive_setup):
     state = run_smb_zfs_command("get-state")
     assert 'cleanup_user' in state['users']
     assert 'cleanup_group' in state['groups']
-    assert 'cleanup_share' in state['samba']['shares']
+    assert 'cleanup_share' in state['shares']
 
     # Clean them up
     run_smb_zfs_command("delete user cleanup_user --delete-data --yes --json")
@@ -291,4 +291,4 @@ def test_cleanup_operations(comprehensive_setup):
     final_state = run_smb_zfs_command("get-state")
     assert 'cleanup_user' not in final_state['users']
     assert 'cleanup_group' not in final_state['groups']
-    assert 'cleanup_share' not in final_state['samba']['shares']
+    assert 'cleanup_share' not in final_state['shares']

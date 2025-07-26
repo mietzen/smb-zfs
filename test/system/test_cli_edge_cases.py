@@ -97,9 +97,9 @@ def test_share_permission_combinations(initial_state):
 
     state = run_smb_zfs_command("get-state")
 
-    assert 'mixed_perms' in state['samba']['shares']
-    assert state['samba']['shares']['readonly_share']['read only'] == 'yes'
-    assert state['samba']['shares']['hidden_share']['browseable'] == 'no'
+    assert 'mixed_perms' in state['shares']
+    assert state['shares']['readonly_share']['read only'] == 'yes'
+    assert state['shares']['hidden_share']['browseable'] == 'no'
 
 
 # --- Quota Format and Edge Case Tests ---
@@ -178,17 +178,15 @@ def test_get_state_comprehensive(initial_state):
     # Verify state structure
     assert 'users' in state
     assert 'groups' in state
-    assert 'samba' in state
     assert 'zfs' in state
 
     # Verify specific entries
     assert 'state_user' in state['users']
     assert 'state_group' in state['groups']
-    assert 'state_share' in state['samba']['shares']
+    assert 'state_share' in state['shares']
 
     # Verify nested structure
-    assert 'global' in state['samba']
-    assert 'shares' in state['samba']
+    assert 'shares' in state
     assert 'pools' in state['zfs']
 
 
@@ -231,7 +229,7 @@ def test_dataset_path_variations(initial_state):
 
         # Verify dataset was created (path format depends on implementation)
         state = run_smb_zfs_command("get-state")
-        assert share_name in state['samba']['shares']
+        assert share_name in state['shares']
 
 
 # --- Multiple Operations Sequence Tests ---
@@ -256,8 +254,8 @@ def test_multiple_operations_sequence(initial_state):
 
     assert 'workflow_user' in final_state['users']
     assert 'workflow_group' in final_state['groups']
-    assert 'workflow_share' in final_state['samba']['shares']
-    assert final_state['samba']['shares']['workflow_share']['comment'] == 'Modified workflow share'
+    assert 'workflow_share' in final_state['shares']
+    assert final_state['shares']['workflow_share']['comment'] == 'Modified workflow share'
     assert get_zfs_property(
         'primary_testpool/shares/workflow_share', 'quota') == '15G'
     assert get_zfs_property(
@@ -273,7 +271,7 @@ def test_modify_share_boolean_flags(initial_state):
     # Test enabling readonly
     run_smb_zfs_command("modify share bool_share --readonly --json")
     state = run_smb_zfs_command("get-state")
-    assert state['samba']['shares']['bool_share']['read only'] == 'yes'
+    assert state['shares']['bool_share']['read only'] == 'yes'
 
     # Test disabling readonly (using --no-readonly if supported, or opposite flag)
     run_smb_zfs_command("modify share bool_share --json")  # Reset to default
@@ -281,7 +279,7 @@ def test_modify_share_boolean_flags(initial_state):
     # Test enabling no-browse
     run_smb_zfs_command("modify share bool_share --no-browse --json")
     state = run_smb_zfs_command("get-state")
-    assert state['samba']['shares']['bool_share']['browseable'] == 'no'
+    assert state['shares']['bool_share']['browseable'] == 'no'
 
 
 def test_modify_setup_boolean_variations(initial_state):
@@ -347,7 +345,7 @@ def test_delete_share_with_dependencies(initial_state):
 
     # Share should be gone, user should remain
     state = run_smb_zfs_command("get-state")
-    assert 'dependent_share' not in state['samba']['shares']
+    assert 'dependent_share' not in state['shares']
     assert 'share_user' in state['users']
 
 
@@ -457,7 +455,7 @@ def test_smb_conf_consistency(initial_state):
     smb_conf = read_smb_conf()
 
     # Verify state matches smb.conf
-    share_config = state['samba']['shares']['conf_share']
+    share_config = state['shares']['conf_share']
 
     assert f"[conf_share]" in smb_conf
     assert f"comment = {share_config['comment']}" in smb_conf
@@ -540,8 +538,8 @@ def test_comprehensive_workflow(initial_state):
 
     # Verify all shares exist
     for dept in departments:
-        assert f'{dept}_share' in final_state['samba']['shares']
+        assert f'{dept}_share' in final_state['shares']
         assert get_zfs_property(
             f'primary_testpool/shares/{dept}', 'quota') == '100G'
 
-    assert 'common' in final_state['samba']['shares']
+    assert 'common' in final_state['shares']

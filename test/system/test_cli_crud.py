@@ -127,7 +127,7 @@ def test_create_share_basic(initial_state):
     final_state = run_smb_zfs_command("get-state")
     smb_conf = read_smb_conf()
 
-    assert 'testshare1' in final_state['samba']['shares']
+    assert 'testshare1' in final_state['shares']
     assert get_zfs_property(
         'primary_testpool/shares/testshare1', 'quota') == '10G'
     assert '[testshare1]' in smb_conf
@@ -144,7 +144,7 @@ def test_create_share_with_permissions(initial_state):
     final_state = run_smb_zfs_command("get-state")
     smb_conf = read_smb_conf()
 
-    assert 'restrictedshare' in final_state['samba']['shares']
+    assert 'restrictedshare' in final_state['shares']
     assert '[restrictedshare]' in smb_conf
     assert 'valid users = shareuser' in smb_conf
     assert 'read only = yes' in smb_conf
@@ -160,7 +160,7 @@ def test_delete_share_basic(initial_state):
     run_smb_zfs_command("delete share deltshare --yes --json")
     final_state = run_smb_zfs_command("get-state")
 
-    assert 'deltshare' not in final_state['samba']['shares']
+    assert 'deltshare' not in final_state['shares']
     assert '[deltshare]' not in read_smb_conf()
     # Dataset should still exist by default
     assert get_zfs_property(
@@ -178,7 +178,7 @@ def test_delete_share_with_data(initial_state):
         "delete share datadeltshare --delete-data --yes --json")
     final_state = run_smb_zfs_command("get-state")
 
-    assert 'datadeltshare' not in final_state['samba']['shares']
+    assert 'datadeltshare' not in final_state['shares']
     assert get_zfs_property(
         'primary_testpool/shares/datadeltshare', 'type') is None
 
@@ -230,9 +230,9 @@ def test_modify_share_basic_properties(basic_users_and_groups):
     final_state = run_smb_zfs_command("get-state")
     smb_conf = read_smb_conf()
 
-    assert final_state['samba']['shares']['modshare']['comment'] == 'Modified'
-    assert 'user_b' in final_state['samba']['shares']['modshare']['valid users']
-    assert final_state['samba']['shares']['modshare']['read only'] == 'yes'
+    assert final_state['shares']['modshare']['comment'] == 'Modified'
+    assert 'user_b' in final_state['shares']['modshare']['valid users']
+    assert final_state['shares']['modshare']['read only'] == 'yes'
     assert get_zfs_property(
         'primary_testpool/shares/modshare', 'quota') == '25G'
 
@@ -286,7 +286,7 @@ def test_modify_share_browseable(basic_users_and_groups):
     final_state = run_smb_zfs_command("get-state")
     smb_conf = read_smb_conf()
 
-    assert final_state['samba']['shares']['browseshare']['browseable'] == 'no'
+    assert final_state['shares']['browseshare']['browseable'] == 'no'
     assert 'browseable = no' in smb_conf
 
 
