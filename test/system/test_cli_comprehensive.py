@@ -159,8 +159,8 @@ def test_modify_share_all_options(comprehensive_setup):
 
     share_config = state['shares']['modify_all']
     assert share_config['smb_config']['comment'] == 'Fully modified share'
-    assert share_config['smb_config']['read_only'] == 'yes'
-    assert share_config['smb_config']['browseable'] == 'no'
+    assert share_config['smb_config']['read_only'] == True
+    assert share_config['smb_config']['browseable'] == False
     assert 'comp_user1' in share_config['smb_config']['valid_users']
     assert 'comp_user2' in share_config['smb_config']['valid_users']
 

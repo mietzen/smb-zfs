@@ -11,9 +11,9 @@ from conftest import (
 # --- Initial Setup State Tests ---
 def test_initial_setup_state(initial_state):
     """Verify the state after the initial setup in the fixture."""
-    assert initial_state['zfs']['pools']['primary'] == 'primary_testpool'
-    assert 'secondary_testpool' in initial_state['zfs']['pools']['secondary']
-    assert 'tertiary_testpool' in initial_state['zfs']['pools']['secondary']
+    assert initial_state['primary_pool'] == 'primary_testpool'
+    assert 'secondary_testpool' in initial_state['secondary_pools']
+    assert 'tertiary_testpool' in initial_state['secondary_pools']
     assert initial_state['workgroup'] == 'TESTGROUP'
     assert initial_state['server_name'] == 'TESTSERVER'
     assert get_zfs_dataset_exists('primary_testpool/homes')
@@ -56,8 +56,8 @@ def test_modify_setup_remove_secondary_pool(initial_state):
         "modify setup --remove-secondary-pools tertiary_testpool --json")
     final_state = run_smb_zfs_command("get-state")
 
-    assert 'tertiary_testpool' not in final_state['zfs']['pools']['secondary']
-    assert 'secondary_testpool' in final_state['zfs']['pools']['secondary']
+    assert 'tertiary_testpool' not in final_state['secondary_pools']
+    assert 'secondary_testpool' in final_state['secondary_pools']
     assert not get_zfs_dataset_exists('tertiary_testpool/homes')
     assert not get_zfs_dataset_exists('tertiary_testpool/shares')
 
@@ -87,7 +87,7 @@ def test_modify_setup_change_primary_pool(initial_state):
 
     final_state = run_smb_zfs_command("get-state")
 
-    assert final_state['zfs']['pools']['primary'] == 'secondary_testpool'
+    assert final_state['primary_pool'] == 'secondary_testpool'
     # User data should now be on the new primary pool
     assert get_zfs_dataset_exists('secondary_testpool/homes/migrateuser')
 

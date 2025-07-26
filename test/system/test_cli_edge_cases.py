@@ -98,8 +98,8 @@ def test_share_permission_combinations(initial_state):
     state = run_smb_zfs_command("get-state")
 
     assert 'mixed_perms' in state['shares']
-    assert state['shares']['readonly_share']['smb_config']['read_only'] == 'yes'
-    assert state['shares']['hidden_share']['smb_config']['browseable'] == 'no'
+    assert state['shares']['readonly_share']['smb_config']['read_only'] == True
+    assert state['shares']['hidden_share']['smb_config']['browseable'] == False
 
 
 # --- Quota Format and Edge Case Tests ---
@@ -178,7 +178,6 @@ def test_get_state_comprehensive(initial_state):
     # Verify state structure
     assert 'users' in state
     assert 'groups' in state
-    assert 'zfs' in state
 
     # Verify specific entries
     assert 'state_user' in state['users']
@@ -187,7 +186,6 @@ def test_get_state_comprehensive(initial_state):
 
     # Verify nested structure
     assert 'shares' in state
-    assert 'pools' in state['zfs']
 
 
 # --- Error Condition and Recovery Tests ---
@@ -271,7 +269,7 @@ def test_modify_share_boolean_flags(initial_state):
     # Test enabling readonly
     run_smb_zfs_command("modify share bool_share --readonly --json")
     state = run_smb_zfs_command("get-state")
-    assert state['shares']['bool_share']['smb_config']['read_only'] == 'yes'
+    assert state['shares']['bool_share']['smb_config']['read_only'] == True
 
     # Test disabling readonly (using --no-readonly if supported, or opposite flag)
     run_smb_zfs_command("modify share bool_share --json")  # Reset to default
@@ -279,7 +277,7 @@ def test_modify_share_boolean_flags(initial_state):
     # Test enabling no-browse
     run_smb_zfs_command("modify share bool_share --no-browse --json")
     state = run_smb_zfs_command("get-state")
-    assert state['shares']['bool_share']['smb_config']['browseable'] == 'no'
+    assert state['shares']['bool_share']['smb_config']['browseable'] == False
 
 
 def test_modify_setup_boolean_variations(initial_state):
