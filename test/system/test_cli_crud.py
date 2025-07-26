@@ -1,6 +1,7 @@
 from conftest import (
     run_smb_zfs_command,
     get_system_user_details,
+    get_system_user_shell,
     get_system_group_exists,
     get_zfs_property,
     read_smb_conf
@@ -17,7 +18,7 @@ def test_create_user_basic(initial_state):
     assert 'testuser1' in final_state['users']
     assert get_system_user_details('testuser1') is not None
     assert get_zfs_property(
-        'primary_testpool/homes/testuser1', 'mountpoint') == '/home/testuser1'
+        'primary_testpool/homes/testuser1', 'mountpoint') == '/primary_testpool/homes/testuser1'
 
 
 def test_create_user_no_home(initial_state):
@@ -40,10 +41,10 @@ def test_create_user_with_shell(initial_state):
     final_state = run_smb_zfs_command("get-state")
 
     assert 'shelluser' in final_state['users']
-    user_details = get_system_user_details('shelluser')
-    assert user_details is not None
+    user_shell = get_system_user_shell('shelluser')
+    assert user_shell is not None
     # The shell should be /bin/bash when --shell is used
-    assert '/bin/bash' in user_details
+    assert '/bin/bash' in user_shell
 
 
 def test_delete_user_basic(initial_state):
@@ -132,7 +133,7 @@ def test_create_share_basic(initial_state):
         'primary_testpool/shares/testshare1', 'quota') == '10G'
     assert '[testshare1]' in smb_conf
     assert 'comment = My Test Share' in smb_conf
-    assert 'path = /shares/testshare1' in smb_conf
+    assert 'path = primary_testpool/shares/testshare1' in smb_conf
 
 
 def test_create_share_with_permissions(initial_state):

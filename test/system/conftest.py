@@ -43,6 +43,21 @@ def get_system_user_details(username):
         return None
 
 
+def get_system_user_shell(username):
+    """Get shell for a system user."""
+    try:
+        result = subprocess.run(
+            f"getent passwd {username} " + "| awk -F: '{print $NF}'",
+            shell=True,
+            check=True,
+            capture_output=True,
+            text=True
+        )
+        return result.stdout
+    except subprocess.CalledProcessError:
+        return None
+
+
 def get_system_user_exists(username):
     """Check if a system user exists."""
     try:

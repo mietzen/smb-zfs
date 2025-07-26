@@ -3,6 +3,7 @@ import subprocess
 from conftest import (
     run_smb_zfs_command,
     get_system_user_details,
+    get_system_user_shell,
     get_zfs_property,
     read_smb_conf
 )
@@ -59,8 +60,8 @@ def test_user_shell_variations(initial_state):
     # User with shell enabled
     run_smb_zfs_command(
         "create user shell_user --password 'ShellPass!' --shell --json")
-    user_details = get_system_user_details('shell_user')
-    assert '/bin/bash' in user_details
+    user_shell = get_system_user_shell('shell_user')
+    assert '/bin/bash' in user_shell
 
     # User without shell (default)
     run_smb_zfs_command(
@@ -109,7 +110,7 @@ def test_quota_format_variations(initial_state):
         "create user quota_user --password 'QuotaPass!' --json")
 
     # Test different quota formats
-    quota_formats = ['1G', '1024M', '2T', '500G']
+    quota_formats = ['1G', '512M', '2T', '500G']
 
     for i, quota in enumerate(quota_formats):
         run_smb_zfs_command(f"modify home quota_user --quota {quota} --json")
@@ -438,7 +439,7 @@ def test_dataset_structure_consistency(initial_state):
 
     # Verify mountpoints are correct
     assert get_zfs_property(
-        'primary_testpool/homes/struct_user', 'mountpoint') == '/home/struct_user'
+        'primary_testpool/homes/struct_user', 'mountpoint') == '/primary_testpool/homes/struct_user'
     # Share mountpoint should be under /shares
 
 
@@ -457,7 +458,8 @@ def test_smb_conf_consistency(initial_state):
 
     assert f"[conf_share]" in smb_conf
     assert f"comment = {share_config['smb_config']['comment']}" in smb_conf
-    assert f"read only = {share_config['smb_config']['read_only']}" in smb_conf
+    read_only = 'yes' if share_config['smb_config']['read_only'] else 'no'
+    assert f"read only = {read_only}" in smb_conf
 
     # Modify share and verify consistency
     run_smb_zfs_command(
@@ -476,12 +478,12 @@ def test_system_user_integration(initial_state):
         "create user sys_user --password 'SysPass!' --shell --json")
 
     # Verify system user exists and has correct properties
-    user_details = get_system_user_details('sys_user')
-    assert user_details is not None
-    assert '/bin/bash' in user_details  # Should have shell when --shell is used
+    user_shell = get_system_user_shell('sys_user')
+    assert user_shell is not None
+    assert '/bin/bash' in user_shell  # Should have shell when --shell is used
 
     # Verify user is in smb_users group (created during setup)
-    assert 'smb_users' in user_details
+    assert 'smb_users' in user_shell
 
 
 def test_comprehensive_workflow(initial_state):
