@@ -503,7 +503,7 @@ class SmbZfsManager:
 
             if 'quota' in kwargs and kwargs['quota'] is not None:
                 new_quota = kwargs['quota'] if kwargs['quota'].lower(
-                ) != 'none' else None
+                ) != 'none' else 'none'
                 share_info['dataset']['quota'] = new_quota
                 self._zfs.set_quota(share_info["dataset"]["name"], new_quota)
 
@@ -643,7 +643,7 @@ class SmbZfsManager:
                 if key in kwargs and kwargs[key] is not None:
                     value = kwargs[key]
                     if key == 'default_home_quota' and value.lower() == 'none':
-                        value = None
+                        value = 'none'
                     self._state.set(key, value)
                     config_needs_update = True
 
