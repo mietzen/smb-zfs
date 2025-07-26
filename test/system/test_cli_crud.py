@@ -133,7 +133,7 @@ def test_create_share_basic(initial_state):
         'primary_testpool/shares/testshare1', 'quota') == '10G'
     assert '[testshare1]' in smb_conf
     assert 'comment = My Test Share' in smb_conf
-    assert 'path = primary_testpool/shares/testshare1' in smb_conf
+    assert 'path = /primary_testpool/shares/testshare1' in smb_conf
 
 
 def test_create_share_with_permissions(initial_state):
