@@ -1,22 +1,17 @@
 import grp
 import pwd
 import subprocess
-import shlex
+from typing import List, Optional
 
 from .errors import SmbZfsError
 from .const import SMB_CONF
 
 
 class System:
-    """A helper class for executing system commands."""
-
-    def _run(self, command, input_data=None, check=True):
+    def _run(self, command: List[str], input_data: Optional[str] = None, check: bool = True) -> subprocess.CompletedProcess:
+        """Executes a system command."""
         try:
-            # Ensure the command is a list of strings
-            if isinstance(command, str):
-                command = command.split()
-
-            process = subprocess.run(
+            return subprocess.run(
                 command,
                 input=input_data,
                 capture_output=True,
@@ -24,69 +19,55 @@ class System:
                 check=check,
                 shell=False
             )
-            return process
         except FileNotFoundError as e:
             raise SmbZfsError(f"Command not found: {e.filename}") from e
         except subprocess.CalledProcessError as e:
             error_message = (
                 f"Command '{' '.join(e.cmd)}' failed with exit code {e.returncode}.\n"
-                f"Stderr: {e.stderr.strip()}"
+                f"Stderr: {e.stderr.strip() if e.stderr else ''}"
             )
             raise SmbZfsError(error_message) from e
 
-
-    def _run_piped(self, commands):
+    def _run_piped(self, commands: List[List[str]]) -> subprocess.CompletedProcess:
+        """Executes a series of piped commands safely."""
         try:
             procs = []
-            proc_stdin = None
-
-            for cmd in commands:
-                if isinstance(cmd, str):
-                    cmd = cmd.split()
-
+            stdin_stream = None
+            for i, cmd in enumerate(commands):
                 proc = subprocess.Popen(
                     cmd,
-                    stdin=proc_stdin,
+                    stdin=stdin_stream,
                     stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE
+                    stderr=subprocess.PIPE,
+                    text=True
                 )
                 procs.append(proc)
-
-                if len(procs) > 1:
-                    procs[-2].stdout.close()
-
-                proc_stdin = proc.stdout
+                if i > 0:
+                    procs[i-1].stdout.close()
+                stdin_stream = proc.stdout
 
             last_proc = procs[-1]
             stdout, stderr = last_proc.communicate()
 
-            for proc in procs[:-1]:
-                proc.wait()
-
-            # Now, check the return code of every process in the chain
             for proc in procs:
+                proc.wait()
                 if proc.returncode != 0:
-                    error_message = (
+                    raise SmbZfsError(
                         f"Command '{' '.join(proc.args)}' failed with exit code {proc.returncode}.\n"
-                        f"Final Stderr: {stderr.decode().strip()}"
+                        f"Final Stderr: {stderr.strip()}"
                     )
-                    raise SmbZfsError(error_message)
 
-            # If we get here, all commands succeeded.
             return subprocess.CompletedProcess(
                 args=last_proc.args,
                 returncode=last_proc.returncode,
                 stdout=stdout,
                 stderr=stderr
             )
-
         except FileNotFoundError as e:
             raise SmbZfsError(f"Command not found: {e.filename}") from e
 
-
-    def is_package_installed(self, package_name):
-        """Checks if a Debian package is installed using dpkg-query."""
-        # Use check=False to handle cases where the package is not found
+    def is_package_installed(self, package_name: str) -> bool:
+        """Checks if a Debian package is installed."""
         result = self._run(
             ["dpkg-query", "--show",
                 "--showformat=${db:Status-Status}", package_name],
@@ -94,85 +75,106 @@ class System:
         )
         return result.returncode == 0 and result.stdout.strip() == "installed"
 
-    def user_exists(self, username):
+    def user_exists(self, username: str) -> bool:
+        """Checks if a system user exists."""
         try:
             pwd.getpwnam(username)
             return True
         except KeyError:
             return False
 
-    def group_exists(self, groupname):
+    def group_exists(self, groupname: str) -> bool:
+        """Checks if a system group exists."""
         try:
             grp.getgrnam(groupname)
             return True
         except KeyError:
             return False
 
-    def add_system_user(self, username, home_dir=None, shell=None):
+    def add_system_user(self, username: str, home_dir: Optional[str] = None, shell: Optional[str] = None) -> None:
+        """Adds a system user idempotently."""
+        if self.user_exists(username):
+            return
         cmd = ["useradd"]
         if home_dir:
             cmd.extend(["-d", home_dir, "-m"])
         else:
             cmd.append("-M")
-        if shell:
-            cmd.extend(["-s", shell])
-        else:
-            cmd.extend(["-s", "/usr/sbin/nologin"])
+        cmd.extend(["-s", shell or "/usr/sbin/nologin"])
         cmd.append(username)
         self._run(cmd)
 
-    def delete_system_user(self, username):
-        self._run(["userdel", username])
+    def delete_system_user(self, username: str) -> None:
+        """Deletes a system user idempotently."""
+        if self.user_exists(username):
+            self._run(["userdel", username])
 
-    def add_system_group(self, groupname):
-        self._run(["groupadd", groupname])
+    def add_system_group(self, groupname: str) -> None:
+        """Adds a system group idempotently."""
+        if not self.group_exists(groupname):
+            self._run(["groupadd", groupname])
 
-    def delete_system_group(self, groupname):
-        self._run(["groupdel", groupname])
+    def delete_system_group(self, groupname: str) -> None:
+        """Deletes a system group idempotently."""
+        if self.group_exists(groupname):
+            self._run(["groupdel", groupname])
 
-    def add_user_to_group(self, username, groupname):
+    def add_user_to_group(self, username: str, groupname: str) -> None:
+        """Adds a user to a system group."""
         self._run(["usermod", "-a", "-G", groupname, username])
 
-    def remove_user_from_group(self, username, groupname):
+    def remove_user_from_group(self, username: str, groupname: str) -> None:
+        """Removes a user from a system group."""
         self._run(["gpasswd", "-d", username, groupname])
 
-    def set_system_password(self, username, password):
+    def set_system_password(self, username: str, password: str) -> None:
+        """Sets a user's system password via chpasswd."""
         self._run(["chpasswd"], input_data=f"{username}:{password}")
 
-    def add_samba_user(self, username, password):
+    def add_samba_user(self, username: str, password: str) -> None:
+        """Adds a new Samba user."""
         self._run(
             ["smbpasswd", "-a", "-s", username], input_data=f"{password}\n{password}"
         )
         self._run(["smbpasswd", "-e", username])
 
-    def delete_samba_user(self, username):
+    def delete_samba_user(self, username: str) -> None:
+        """Deletes a Samba user idempotently."""
         if self.samba_user_exists(username):
             self._run(["smbpasswd", "-x", username])
 
-    def samba_user_exists(self, username):
-        result = self._run(["pdbedit", "-L"])
-        return f"{username}:" in result.stdout
+    def samba_user_exists(self, username: str) -> bool:
+        """Checks if a Samba user exists in the database."""
+        result = self._run(["pdbedit", "-L", "-u", username], check=False)
+        return result.returncode == 0
 
-    def set_samba_password(self, username, password):
+    def set_samba_password(self, username: str, password: str) -> None:
+        """Sets a Samba user's password."""
         self._run(["smbpasswd", "-s", username],
                   input_data=f"{password}\n{password}")
 
-    def test_samba_config(self):
+    def test_samba_config(self) -> None:
+        """Tests the Samba configuration file for syntax errors."""
         self._run(["testparm", "-s", SMB_CONF])
 
-    def reload_samba(self):
+    def reload_samba(self) -> None:
+        """Reloads the Samba service configuration."""
         self._run(["systemctl", "reload", "smbd", "nmbd"])
 
-    def restart_services(self):
+    def restart_services(self) -> None:
+        """Restarts core networking and file sharing services."""
         self._run(["systemctl", "restart", "smbd", "nmbd", "avahi-daemon"])
 
-    def enable_services(self):
+    def enable_services(self) -> None:
+        """Enables core services to start on boot."""
         self._run(["systemctl", "enable", "smbd", "nmbd", "avahi-daemon"])
 
-    def stop_services(self):
+    def stop_services(self) -> None:
+        """Stops core services."""
         self._run(["systemctl", "stop", "smbd",
                   "nmbd", "avahi-daemon"], check=False)
 
-    def disable_services(self):
+    def disable_services(self) -> None:
+        """Disables core services from starting on boot."""
         self._run(["systemctl", "disable", "smbd",
                   "nmbd", "avahi-daemon"], check=False)

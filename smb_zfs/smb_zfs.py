@@ -18,10 +18,10 @@ from .errors import (
     NotInitializedError,
     AlreadyInitializedError,
     ItemExistsError,
-    ItemNotFoundError,
+    StateItemNotFoundError,
     InvalidNameError,
     PrerequisiteError,
-    ImmutableError,
+    SmbZfsError,
 )
 
 STATE_FILE = f"/var/lib/{NAME}.state"
@@ -130,11 +130,11 @@ class SmbZfsManager:
         # Validate that the provided ZFS pools exist.
         available_pools = self._zfs.list_pools()
         if primary_pool not in available_pools:
-            raise ItemNotFoundError(f"ZFS pool '{primary_pool}' not found. Available pools", ", ".join(
+            raise StateItemNotFoundError(f"ZFS pool '{primary_pool}' not found. Available pools", ", ".join(
                 available_pools) if available_pools else "None")
         for pool in secondary_pools:
             if pool not in available_pools:
-                raise ItemNotFoundError(f"ZFS secondary pool '{pool}' not found. Available pools", ", ".join(
+                raise StateItemNotFoundError(f"ZFS secondary pool '{pool}' not found. Available pools", ", ".join(
                     available_pools) if available_pools else "None")
 
         self._zfs.create_dataset(f"{primary_pool}/homes")
@@ -243,7 +243,7 @@ class SmbZfsManager:
                         self._system.add_user_to_group(username, group)
                         user_groups.append(group)
                     else:
-                        raise ItemNotFoundError("group", group)
+                        raise StateItemNotFoundError("group", group)
 
             user_data["groups"] = user_groups
 
@@ -256,7 +256,7 @@ class SmbZfsManager:
     def delete_user(self, username, delete_data=False):
         user_info = self._state.get_item("users", username)
         if not user_info:
-            raise ItemNotFoundError("user", username)
+            raise StateItemNotFoundError("user", username)
 
         self._system.delete_samba_user(username)
         if self._system.user_exists(username):
@@ -287,7 +287,7 @@ class SmbZfsManager:
             if members:
                 for user in members:
                     if not self._state.get_item("users", user):
-                        raise ItemNotFoundError("user", user)
+                        raise StateItemNotFoundError("user", user)
                     self._system.add_user_to_group(user, groupname)
                     added_members.append(user)
 
@@ -304,9 +304,9 @@ class SmbZfsManager:
     @requires_initialization
     def delete_group(self, groupname):
         if not self._state.get_item("groups", groupname):
-            raise ItemNotFoundError("group", groupname)
+            raise StateItemNotFoundError("group", groupname)
         if groupname == "smb_users":
-            raise ImmutableError(
+            raise SmbZfsError(
                 "Cannot delete the mandatory 'smb_users' group.")
 
         if self._system.group_exists(groupname):
@@ -343,10 +343,10 @@ class SmbZfsManager:
                 f"Permissions '{perms}' are invalid. Must be 3 or 4 octal digits (e.g., 775 or 0775).")
 
         if not self._system.user_exists(owner):
-            raise ItemNotFoundError("user", owner)
+            raise StateItemNotFoundError("user", owner)
 
         if not self._system.group_exists(group):
-            raise ItemNotFoundError("group", group)
+            raise StateItemNotFoundError("group", group)
 
         primary_pool = self._state.get("primary_pool")
         secondary_pools = self._state.get("secondary_pools", [])
@@ -379,10 +379,10 @@ class SmbZfsManager:
                     item_name = item.lstrip('@')
                     if '@' in item:
                         if not self._system.group_exists(item_name):
-                            raise ItemNotFoundError("group", item_name)
+                            raise StateItemNotFoundError("group", item_name)
                     else:
                         if not self._system.user_exists(item_name):
-                            raise ItemNotFoundError("user", item_name)
+                            raise StateItemNotFoundError("user", item_name)
 
             share_data = {
                 "dataset": {
@@ -426,7 +426,7 @@ class SmbZfsManager:
     def delete_share(self, name, delete_data=False):
         share_info = self._state.get_item("shares", name)
         if not share_info:
-            raise ItemNotFoundError("share", name)
+            raise StateItemNotFoundError("share", name)
 
         self._config.remove_share_from_conf(name)
         self._system.test_samba_config()
@@ -442,20 +442,20 @@ class SmbZfsManager:
     def modify_group(self, groupname, add_users=None, remove_users=None):
         group_info = self._state.get_item("groups", groupname)
         if not group_info:
-            raise ItemNotFoundError("group", groupname)
+            raise StateItemNotFoundError("group", groupname)
 
         current_members = set(group_info.get("members", []))
         if add_users:
             for user in add_users:
                 if not self._state.get_item("users", user):
-                    raise ItemNotFoundError("user", user)
+                    raise StateItemNotFoundError("user", user)
                 self._system.add_user_to_group(user, groupname)
                 current_members.add(user)
 
         if remove_users:
             for user in remove_users:
                 if not self._state.get_item("users", user):
-                    raise ItemNotFoundError("user", user)
+                    raise StateItemNotFoundError("user", user)
 
                 if user in current_members:
                     self._system.remove_user_from_group(user, groupname)
@@ -469,7 +469,7 @@ class SmbZfsManager:
     def modify_share(self, share_name, **kwargs):
         share_info = self._state.get_item("shares", share_name)
         if not share_info:
-            raise ItemNotFoundError("share", share_name)
+            raise StateItemNotFoundError("share", share_name)
 
         samba_config_changed = False
         original_share_info = self._state.get_data_copy()['shares'][share_name]
@@ -510,12 +510,12 @@ class SmbZfsManager:
             system_changed = False
             if 'owner' in kwargs and kwargs['owner'] is not None:
                 if not self._system.user_exists(kwargs['owner']):
-                    raise ItemNotFoundError("user", kwargs['owner'])
+                    raise StateItemNotFoundError("user", kwargs['owner'])
                 share_info['system']['owner'] = kwargs['owner']
                 system_changed = True
             if 'group' in kwargs and kwargs['group'] is not None:
                 if not self._system.group_exists(kwargs['group']):
-                    raise ItemNotFoundError("group", kwargs['group'])
+                    raise StateItemNotFoundError("group", kwargs['group'])
                 share_info['system']['group'] = kwargs['group']
                 system_changed = True
             if 'permissions' in kwargs and kwargs['permissions'] is not None:
@@ -543,10 +543,10 @@ class SmbZfsManager:
                     item_name = item.lstrip('@')
                     if '@' in item:
                         if not self._system.group_exists(item_name):
-                            raise ItemNotFoundError("group", item_name)
+                            raise StateItemNotFoundError("group", item_name)
                     else:
                         if not self._system.user_exists(item_name):
-                            raise ItemNotFoundError("user", item_name)
+                            raise StateItemNotFoundError("user", item_name)
                 share_info['smb_config']['valid_users'] = kwargs['valid_users']
                 samba_config_changed = True
             if 'read_only' in kwargs:
@@ -584,7 +584,7 @@ class SmbZfsManager:
                 old_primary_pool = self._state.get('primary_pool')
                 if new_primary_pool != old_primary_pool:
                     if new_primary_pool not in self._zfs.list_pools():
-                        raise ItemNotFoundError("ZFS pool", new_primary_pool)
+                        raise StateItemNotFoundError("ZFS pool", new_primary_pool)
 
                     if move_data:
                         print("Moving data from old primary pool to new primary pool...")
@@ -623,7 +623,7 @@ class SmbZfsManager:
                 current_pools = set(self._state.get('secondary_pools', []))
                 for pool in kwargs['add_secondary_pools']:
                     if pool not in self._zfs.list_pools():
-                        raise ItemNotFoundError("ZFS pool", pool)
+                        raise StateItemNotFoundError("ZFS pool", pool)
                     current_pools.add(pool)
                 self._state.set('secondary_pools', sorted(list(current_pools)))
 
@@ -675,7 +675,7 @@ class SmbZfsManager:
     def modify_home(self, username, quota):
         user_info = self._state.get_item("users", username)
         if not user_info:
-            raise ItemNotFoundError("user", username)
+            raise StateItemNotFoundError("user", username)
 
         home_dataset = user_info["dataset"]["name"]
         new_quota = quota if quota and quota.lower() != 'none' else 'none'
@@ -688,7 +688,7 @@ class SmbZfsManager:
     def change_password(self, username, new_password):
         user_info = self._state.get_item("users", username)
         if not user_info:
-            raise ItemNotFoundError("user", username)
+            raise StateItemNotFoundError("user", username)
 
         if user_info.get("shell_access"):
             self._system.set_system_password(username, new_password)

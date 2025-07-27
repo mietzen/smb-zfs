@@ -2,10 +2,7 @@ import time
 import subprocess
 from typing import List, Optional
 from .system import System
-
-
-class SmbZfsError(Exception):
-    pass
+from .errors import ZfsCmdError
 
 
 class Zfs:
@@ -89,11 +86,11 @@ class Zfs:
     def rename_dataset(self, old_dataset: str, new_dataset: str) -> None:
         """Renames a ZFS dataset."""
         if not self.dataset_exists(old_dataset):
-            raise SmbZfsError(
+            raise ZfsCmdError(
                 f"Cannot rename: source dataset '{old_dataset}' does not exist.")
 
         if self.dataset_exists(new_dataset):
-            raise SmbZfsError(
+            raise ZfsCmdError(
                 f"Cannot rename: destination dataset '{new_dataset}' already exists.")
 
         self._system._run(["zfs", "rename", old_dataset, new_dataset])
@@ -101,17 +98,17 @@ class Zfs:
     def move_dataset(self, dataset_path: str, new_pool: str) -> None:
         """Safely moves a ZFS dataset to a new pool with verification."""
         if not self.dataset_exists(dataset_path):
-            raise SmbZfsError(
+            raise ZfsCmdError(
                 f"Source dataset '{dataset_path}' does not exist.")
 
         if not self.dataset_exists(new_pool):
-            raise SmbZfsError(f"Destination pool '{new_pool}' does not exist.")
+            raise ZfsCmdError(f"Destination pool '{new_pool}' does not exist.")
 
         required_bytes = int(self._get_zfs_property(dataset_path, 'used'))
         available_bytes = int(self._get_zfs_property(new_pool, 'available'))
 
         if required_bytes > available_bytes:
-            raise SmbZfsError(
+            raise ZfsCmdError(
                 f"Not enough space on pool '{new_pool}'. "
                 f"Required: {required_bytes}, Available: {available_bytes}"
             )
@@ -124,19 +121,21 @@ class Zfs:
         dest_snapshot = f"{dest_dataset}@{snapshot_name}"
 
         if self.dataset_exists(dest_dataset):
-            raise SmbZfsError(
+            raise ZfsCmdError(
                 f"Destination dataset '{dest_dataset}' already exists. Please remove it first.")
 
         try:
             self._system._run(["zfs", "snapshot", source_snapshot])
             self._system._run_piped(
-                [f"zfs send {source_snapshot}", f"zfs recv -F {dest_dataset}"])
+                [["zfs", "send", source_snapshot], [
+                    "zfs", "recv", "-F", dest_dataset]]
+            )
 
             source_guid = self._get_zfs_property(source_snapshot, 'guid')
             dest_guid = self._get_zfs_property(dest_snapshot, 'guid')
 
             if source_guid == "0" or dest_guid == "0" or source_guid != dest_guid:
-                raise SmbZfsError(
+                raise ZfsCmdError(
                     "Verification failed! Snapshot GUIDs do not match. "
                     f"Source: {source_guid}, Dest: {dest_guid}"
                 )
@@ -144,7 +143,7 @@ class Zfs:
             self._system._run(["zfs", "destroy", "-r", dataset_path])
             self._system._run(["zfs", "destroy", dest_snapshot])
 
-        except (subprocess.CalledProcessError, SmbZfsError) as e:
+        except (subprocess.CalledProcessError, ZfsCmdError) as e:
             if self.dataset_exists(dest_dataset):
                 self._system._run(
                     ["zfs", "destroy", "-r", dest_dataset], check=False)
@@ -153,5 +152,5 @@ class Zfs:
                 self._system._run(
                     ["zfs", "destroy", source_snapshot], check=False)
 
-            raise SmbZfsError(
+            raise ZfsCmdError(
                 "ZFS move failed and has been rolled back.") from e
