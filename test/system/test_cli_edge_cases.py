@@ -50,7 +50,7 @@ def test_user_with_groups_flag(initial_state):
     run_smb_zfs_command(
         "create user sztest_grouped_user --password 'GroupedPass!' --groups initial_group1,initial_group2 --json")
 
-    user_details = get_system_user_details('grouped_user')
+    user_details = get_system_user_details('sztest_grouped_user')
     assert 'initial_group1' in user_details
     assert 'initial_group2' in user_details
 
@@ -66,7 +66,7 @@ def test_user_shell_variations(initial_state):
     # User without shell (default)
     run_smb_zfs_command(
         "create user sztest_noshell_user --password 'NoShellPass!' --json")
-    user_details = get_system_user_details('noshell_user')
+    user_details = get_system_user_details('sztest_noshell_user')
     # Should have restricted shell (implementation dependent)
 
 
@@ -140,27 +140,27 @@ def test_share_quota_variations(initial_state):
 def test_group_membership_complex_operations(initial_state):
     """Test complex group membership operations."""
     # Create users and groups
-    run_smb_zfs_command("create user sztest_member1 --password 'Member1!' --json")
-    run_smb_zfs_command("create user sztest_member2 --password 'Member2!' --json")
-    run_smb_zfs_command("create user sztest_member3 --password 'Member3!' --json")
+    run_smb_zfs_command("create user sztest_member1 --password 'sztest_member1!' --json")
+    run_smb_zfs_command("create user sztest_member2 --password 'sztest_member2!' --json")
+    run_smb_zfs_command("create user sztest_member3 --password 'sztest_member3!' --json")
     run_smb_zfs_command("create group sztest_complex_group --json")
 
     # Add multiple users at once
     run_smb_zfs_command(
-        "modify group sztest_complex_group --add-users sztest_member1,member2,member3 --json")
+        "modify group sztest_complex_group --add-users sztest_member1,sztest_member2,sztest_member3 --json")
 
     # Verify all are members
-    for user in ['member1', 'member2', 'member3']:
+    for user in ['sztest_member1', 'sztest_member2', 'sztest_member3']:
         assert 'complex_group' in get_system_user_details(user)
 
     # Remove some users
     run_smb_zfs_command(
-        "modify group sztest_complex_group --remove-users member1,member3 --json")
+        "modify group sztest_complex_group --remove-users sztest_member1,sztest_member3 --json")
 
     # Verify membership changes
-    assert 'complex_group' not in get_system_user_details('member1')
-    assert 'complex_group' in get_system_user_details('member2')
-    assert 'complex_group' not in get_system_user_details('member3')
+    assert 'complex_group' not in get_system_user_details('sztest_member1')
+    assert 'complex_group' in get_system_user_details('sztest_member2')
+    assert 'complex_group' not in get_system_user_details('sztest_member3')
 
 
 # --- State File Operation Tests ---
@@ -181,8 +181,8 @@ def test_get_state_comprehensive(initial_state):
     assert 'groups' in state
 
     # Verify specific entries
-    assert 'state_user' in state['users']
-    assert 'state_group' in state['groups']
+    assert 'sztest_state_user' in state['users']
+    assert 'sztest_state_group' in state['groups']
     assert 'state_share' in state['shares']
 
     # Verify nested structure
@@ -305,14 +305,14 @@ def test_delete_user_with_group_membership(initial_state):
     run_smb_zfs_command("create group sztest_member_group --users member_user --json")
 
     # Verify user is in group
-    assert 'member_group' in get_system_user_details('member_user')
+    assert 'sztest_member_group' in get_system_user_details('sztest_member_user')
 
     # Delete user
     run_smb_zfs_command("delete user sztest_member_user --yes --json")
 
     # User should be removed from group automatically
     state = run_smb_zfs_command("get-state")
-    assert 'member_user' not in state['users']
+    assert 'sztest_member_user' not in state['users']
     # Group should still exist but without the user
 
 
@@ -328,8 +328,8 @@ def test_delete_group_with_members(initial_state):
 
     # Group should be gone, user should remain
     state = run_smb_zfs_command("get-state")
-    assert 'member_group' not in state['groups']
-    assert 'group_member' in state['users']
+    assert 'sztest_member_group' not in state['groups']
+    assert 'sztest_group_member' in state['users']
 
 
 def test_delete_share_with_dependencies(initial_state):
@@ -345,7 +345,7 @@ def test_delete_share_with_dependencies(initial_state):
     # Share should be gone, user should remain
     state = run_smb_zfs_command("get-state")
     assert 'dependent_share' not in state['shares']
-    assert 'share_user' in state['users']
+    assert 'sztest_share_user' in state['users']
 
 
 # --- Complex Remove Scenario Tests ---
@@ -419,7 +419,7 @@ def test_password_security_handling(initial_state):
         "create user sztest_security_user --password 'SecretPassword123!' --json")
 
     # Verify user was created successfully
-    assert get_system_user_details('security_user') is not None
+    assert get_system_user_details('sztest_security_user') is not None
 
 
 # --- Dataset Structure Tests ---
@@ -478,12 +478,12 @@ def test_system_user_integration(initial_state):
         "create user sztest_sys_user --password 'SysPass!' --shell --json")
 
     # Verify system user exists and has correct properties
-    user_shell = get_system_user_shell('sys_user')
+    user_shell = get_system_user_shell('sztest_sys_user')
     assert user_shell is not None
     assert '/bin/bash' in user_shell  # Should have shell when --shell is used
 
     # Verify user is in smb_users group (created during setup)
-    user_details = get_system_user_details('sys_user')
+    user_details = get_system_user_details('sztest_sys_user')
     assert user_details is not None
     assert 'smb_users' in user_details
 

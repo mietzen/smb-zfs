@@ -51,13 +51,13 @@ def test_delete_user_basic(initial_state):
     """Test deleting a user."""
     run_smb_zfs_command(
         "create user sztest_todelete --password 'SecretPassword!' --json")
-    assert get_system_user_details('todelete') is not None
+    assert get_system_user_details('sztest_todelete') is not None
 
     run_smb_zfs_command("delete user sztest_todelete --yes --json")
     final_state = run_smb_zfs_command("get-state")
 
-    assert 'todelete' not in final_state['users']
-    assert get_system_user_details('todelete') is None
+    assert 'sztest_todelete' not in final_state['users']
+    assert get_system_user_details('sztest_todelete') is None
 
 
 def test_delete_user_with_data(initial_state):
@@ -95,14 +95,14 @@ def test_create_group_with_users(initial_state):
         "create user sztest_groupuser2 --password 'SecretPassword!' --json")
 
     run_smb_zfs_command(
-        "create group sztest_testgroup2 --description 'Group with users' --users groupuser1,groupuser2 --json")
+        "create group sztest_testgroup2 --description 'Group with users' --users sztest_groupuser1,sztest_groupuser2 --json")
     final_state = run_smb_zfs_command("get-state")
 
     assert 'testgroup2' in final_state['groups']
     assert get_system_group_exists('testgroup2')
     # Check that users are in the group
-    user1_details = get_system_user_details('groupuser1')
-    user2_details = get_system_user_details('groupuser2')
+    user1_details = get_system_user_details('sztest_groupuser1')
+    user2_details = get_system_user_details('sztest_groupuser2')
     assert 'testgroup2' in user1_details
     assert 'testgroup2' in user2_details
 
