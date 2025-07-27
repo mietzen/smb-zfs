@@ -226,12 +226,10 @@ def cmd_modify_setup(manager, args):
         print("Would modify global setup with the following changes:")
         for key, value in kwargs.items():
             print(f"  - Set {key} to: {value}")
-        if args.move_data:
-            print("  - Move data: True")
         return
 
     check_root()
-    result = manager.modify_setup(move_data=args.move_data, **kwargs)
+    result = manager.modify_setup(**kwargs)
     _handle_output(result, args)
 
 
@@ -624,9 +622,7 @@ def main():
     p_modify_setup = modify_sub.add_parser(
         "setup", help="Modify global server configuration.")
     p_modify_setup.add_argument(
-        "--primary-pool", help="New primary pool. Use with --move-data to migrate existing datasets.")
-    p_modify_setup.add_argument(
-        "--move-data", action="store_true", help="When changing primary-pool, move all relevant datasets.")
+        "--primary-pool", help="New primary pool.")
     p_modify_setup.add_argument(
         "--add-secondary-pools", nargs='*', help="Add new pools for shares.")
     p_modify_setup.add_argument(

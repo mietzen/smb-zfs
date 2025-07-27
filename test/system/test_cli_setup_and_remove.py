@@ -83,7 +83,7 @@ def test_modify_setup_change_primary_pool(initial_state):
 
     # Change primary pool with data migration
     run_smb_zfs_command(
-        "modify setup --primary-pool secondary_testpool --move-data --json")
+        "modify setup --primary-pool secondary_testpool --json")
 
     final_state = run_smb_zfs_command("get-state")
 

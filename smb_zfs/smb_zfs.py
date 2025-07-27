@@ -574,7 +574,7 @@ class SmbZfsManager:
         return {"msg": f"Share '{share_name}' modified successfully.", "state": self._state.get_data_copy()}
 
     @requires_initialization
-    def modify_setup(self, move_data=False, **kwargs):
+    def modify_setup(self, **kwargs):
         original_state = self._state.get_data_copy()
         config_needs_update = False
 
@@ -586,35 +586,34 @@ class SmbZfsManager:
                     if new_primary_pool not in self._zfs.list_pools():
                         raise StateItemNotFoundError("ZFS pool", new_primary_pool)
 
-                    if move_data:
-                        print("Moving data from old primary pool to new primary pool...")
-                        self._zfs.rename_dataset(
-                            f"{old_primary_pool}/homes", f"{new_primary_pool}/homes")
+                    print("Moving data from old primary pool to new primary pool...")
+                    self._zfs.move_dataset(
+                        f"{old_primary_pool}/homes", new_primary_pool)
 
-                        all_users = self._state.list_items("users")
-                        for username, user_info in all_users.items():
-                            user_info['dataset']['name'] = user_info['dataset']['name'].replace(
-                                old_primary_pool, new_primary_pool, 1)
-                            user_info['dataset']['mount_point'] = self._zfs.get_mountpoint(
-                                user_info['dataset']['name'])
-                            user_info['dataset']['pool'] = new_primary_pool
-                            self._state.set_item("users", username, user_info)
+                    all_users = self._state.list_items("users")
+                    for username, user_info in all_users.items():
+                        user_info['dataset']['name'] = user_info['dataset']['name'].replace(
+                            old_primary_pool, new_primary_pool, 1)
+                        user_info['dataset']['mount_point'] = self._zfs.get_mountpoint(
+                            user_info['dataset']['name'])
+                        user_info['dataset']['pool'] = new_primary_pool
+                        self._state.set_item("users", username, user_info)
 
-                        all_shares = self._state.list_items("shares")
-                        for share_name, share_info in all_shares.items():
-                            if share_info['dataset']['pool'] == old_primary_pool:
-                                old_dataset_name = share_info['dataset']['name']
-                                dataset_path_in_pool = '/'.join(
-                                    old_dataset_name.split('/')[1:])
-                                new_dataset_name = f"{new_primary_pool}/{dataset_path_in_pool}"
-                                self._zfs.rename_dataset(
-                                    old_dataset_name, new_dataset_name)
-                                share_info['dataset']['pool'] = new_primary_pool
-                                share_info['dataset']['name'] = new_dataset_name
-                                share_info['dataset']['mount_point'] = self._zfs.get_mountpoint(
-                                    new_dataset_name)
-                                self._state.set_item(
-                                    "shares", share_name, share_info)
+                    all_shares = self._state.list_items("shares")
+                    for share_name, share_info in all_shares.items():
+                        if share_info['dataset']['pool'] == old_primary_pool:
+                            old_dataset_name = share_info['dataset']['name']
+                            dataset_path_in_pool = '/'.join(
+                                old_dataset_name.split('/')[1:])
+                            new_dataset_name = f"{new_primary_pool}/{dataset_path_in_pool}"
+                            self._zfs.rename_dataset(
+                                old_dataset_name, new_dataset_name)
+                            share_info['dataset']['pool'] = new_primary_pool
+                            share_info['dataset']['name'] = new_dataset_name
+                            share_info['dataset']['mount_point'] = self._zfs.get_mountpoint(
+                                new_dataset_name)
+                            self._state.set_item(
+                                "shares", share_name, share_info)
 
                     self._state.set('primary_pool', new_primary_pool)
                     config_needs_update = True
