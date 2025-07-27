@@ -7,7 +7,7 @@ import pytest
 import shlex
 import subprocess
 from smb_zfs.cli import main as cli
-from smb_zfs.smb_zfs import STATE_FILE
+from smb_zfs.smb_zfs import STATE_FILE, SMB_CONF
 from unittest.mock import patch
 from contextlib import redirect_stdout, redirect_stderr
 
@@ -162,6 +162,8 @@ def manage_smb_zfs_environment():
     finally:
         if os.path.exists(STATE_FILE):
             os.remove(STATE_FILE)
+        if os.path.exists(SMB_CONF):
+            os.remove(SMB_CONF)
         cleanup_test_datasets([
             "primary_testpool",
             "secondary_testpool",

@@ -239,7 +239,7 @@ def test_multiple_operations_sequence(initial_state):
         "create user sztest_workflow_user --password 'WorkflowPass!' --json",
         "create group sztest_workflow_group --description 'Workflow group' --json",
         "modify group sztest_workflow_group --add-users sztest_workflow_user --json",
-        "create share workflow_share --dataset shares/workflow_share --valid-users @workflow_group --json",
+        "create share workflow_share --dataset shares/workflow_share --valid-users @sztest_workflow_user --json",
         "modify share workflow_share --comment 'Modified workflow share' --quota 15G --json",
         "modify home sztest_workflow_user --quota 5G --json"
     ]
@@ -302,7 +302,7 @@ def test_delete_user_with_group_membership(initial_state):
     """Test deleting user who is member of groups."""
     run_smb_zfs_command(
         "create user sztest_member_user --password 'MemberPass!' --json")
-    run_smb_zfs_command("create group sztest_member_group --users member_user --json")
+    run_smb_zfs_command("create group sztest_member_group --users sztest_member_user --json")
 
     # Verify user is in group
     assert 'sztest_member_group' in get_system_user_details('sztest_member_user')
@@ -493,24 +493,24 @@ def test_comprehensive_workflow(initial_state):
     # Simulate setting up a complete SMB environment
 
     # 1. Create departments (groups)
-    departments = ['engineering', 'marketing', 'finance']
+    departments = ['sztest_engineering', 'sztest_marketing', 'sztest_finance']
     for dept in departments:
         run_smb_zfs_command(
             f"create group sztest_{dept} --description '{dept.capitalize()} department' --json")
 
     # 2. Create users for each department
     users = [
-        ('sztest_alice', 'engineering'),
-        ('sztest_bob', 'engineering'),
-        ('sztest_carol', 'marketing'),
-        ('sztest_dave', 'finance')
+        ('sztest_alice', 'sztest_engineering'),
+        ('sztest_bob', 'sztest_engineering'),
+        ('sztest_carol', 'sztest_marketing'),
+        ('sztest_dave', 'sztest_finance')
     ]
 
     for username, dept in users:
         run_smb_zfs_command(
-            f"create user sztest_{username} --password '{username.capitalize()}Pass!' --shell --json")
+            f"create user {username} --password '{username.capitalize()}Pass!' --shell --json")
         run_smb_zfs_command(
-            f"modify group sztest_{dept} --add-users sztest_{username} --json")
+            f"modify group {dept} --add-users {username} --json")
 
     # 3. Create departmental shares
     for dept in departments:
@@ -523,7 +523,7 @@ def test_comprehensive_workflow(initial_state):
 
     # 5. Set individual quotas
     for username, _ in users:
-        run_smb_zfs_command(f"modify home sztest_{username} --quota 10G --json")
+        run_smb_zfs_command(f"modify home {username} --quota 10G --json")
 
     # 6. Verify final state
     final_state = run_smb_zfs_command("get-state")
@@ -532,7 +532,7 @@ def test_comprehensive_workflow(initial_state):
     for username, _ in users:
         assert username in final_state['users']
         assert get_zfs_property(
-            f'primary_testpool/homes/sztest_{username}', 'quota') == '10G'
+            f'primary_testpool/homes/{username}', 'quota') == '10G'
 
     # Verify all groups exist
     for dept in departments:
