@@ -1,31 +1,43 @@
-import pytest
-import subprocess
+import io
 import json
+import os
+import pytest
+import shlex
+import subprocess
+from smb_zfs.cli import main as cli
+from smb_zfs.smb_zfs import STATE_FILE
+from unittest.mock import patch
+from contextlib import redirect_stdout, redirect_stderr
+
 
 def run_smb_zfs_command(command):
     """Helper function to run smb-zfs commands."""
-    try:
-        # The get-state command always returns JSON without a flag.
-        is_json_output = "--json" in command or command.strip().startswith("get-state")
+    # The get-state command always returns JSON without a flag.
+    is_json_output = "--json" in command or command.strip().startswith("get-state")
 
-        result = subprocess.run(
-            f"smb-zfs {command}",
-            shell=True,
-            check=True,
-            capture_output=True,
-            text=True
-        )
-        if is_json_output:
-            # Handle cases where stdout might be empty on success (e.g., some --json commands)
-            if not result.stdout.strip():
-                return {}
-            return json.loads(result.stdout)
-        return result.stdout
-    except subprocess.CalledProcessError as e:
-        print(f"Error running command: smb-zfs {command}")
-        print(f"Stderr: {e.stderr}")
-        print(f"Stdout: {e.stdout}")
-        raise
+    stdout_buffer = io.StringIO()
+    stderr_buffer = io.StringIO()
+
+    # Redirect stdout and stderr
+    with redirect_stdout(stdout_buffer), redirect_stderr(stderr_buffer):
+        try:
+            with patch("sys.argv", ['smb-zfs'] + shlex.split(command)):
+                cli()
+        except SystemExit:
+            # argparse may call sys.exit(), especially on errors or --help
+            pass
+
+    stdout = stdout_buffer.getvalue()
+    stderr = stderr_buffer.getvalue()
+    if stderr:
+        return f'{stdout}\n\n{stderr}'
+
+    if is_json_output:
+        # Handle cases where stdout might be empty on success (e.g., some --json commands)
+        if not stdout.strip():
+            return {}
+        return json.loads(stdout)
+    return stdout
 
 
 def get_system_user_details(username):
@@ -114,15 +126,16 @@ def get_zfs_dataset_exists(dataset):
     except subprocess.CalledProcessError:
         return False
 
+
 def get_zfs_dataset(pool):
     """Check if a ZFS dataset exists."""
     result = subprocess.run(
-            ["zfs", "list", "-H", "-o", "name", "-r", pool],
-            check=True,
-            capture_output=True,
-            text=True,
-            encoding='utf-8'
-        )
+        ["zfs", "list", "-H", "-o", "name", "-r", pool],
+        check=True,
+        capture_output=True,
+        text=True,
+        encoding='utf-8'
+    )
     return result.stdout.strip().splitlines()[1:]
 
 
@@ -140,12 +153,14 @@ def manage_smb_zfs_environment():
     """Fixture to set up and tear down smb-zfs for each test."""
     # Setup: Ensure a clean state before setting up
     try:
-        run_smb_zfs_command("remove --delete-users --delete-data --yes")
-        run_smb_zfs_command("setup --primary-pool primary_testpool --secondary-pools secondary_testpool tertiary_testpool --server-name TESTSERVER --workgroup TESTGROUP")
+        run_smb_zfs_command(
+            "setup --primary-pool primary_testpool --secondary-pools secondary_testpool tertiary_testpool --server-name TESTSERVER --workgroup TESTGROUP")
         yield
+        # <- This is not working!
         run_smb_zfs_command("remove --delete-users --delete-data --yes")
     finally:
-        pass
+        run_smb_zfs_command("remove --delete-users --delete-data --yes")
+        os.remove(STATE_FILE)
         # delete_all_datasets([
         #     "primary_testpool",
         #     "secondary_testpool",
@@ -160,13 +175,16 @@ def delete_all_datasets(pools):
                 try:
                     print(f"Teardown: Destroying ZFS dataset '{dataset}'")
                     # Use -r to recursively destroy snapshots and children
-                    subprocess.run(["zfs", "destroy", "-r", dataset], check=True)
+                    subprocess.run(
+                        ["zfs", "destroy", "-r", dataset], check=True)
                 except subprocess.CalledProcessError as e_destroy:
-                    print(f"Warning: Failed to destroy dataset {dataset}: {e_destroy}")
+                    print(
+                        f"Warning: Failed to destroy dataset {dataset}: {e_destroy}")
 
         except subprocess.CalledProcessError as e_list:
             # This might happen if a pool doesn't exist.
-            print(f"Warning: Failed to list datasets for pool {pool}: {e_list}")
+            print(
+                f"Warning: Failed to list datasets for pool {pool}: {e_list}")
 
 
 @pytest.fixture
@@ -182,21 +200,29 @@ def basic_users_and_groups():
     run_smb_zfs_command("create user user_a --password 'PassA!' --json")
     run_smb_zfs_command("create user user_b --password 'PassB!' --json")
     run_smb_zfs_command("create user user_c --password 'PassC!' --json")
-    run_smb_zfs_command("create group test_group --description 'A test group' --json")
+    run_smb_zfs_command(
+        "create group test_group --description 'A test group' --json")
 
 
 @pytest.fixture
 def comprehensive_setup():
     """Fixture to create a comprehensive test environment."""
     # Create users
-    run_smb_zfs_command("create user comp_user1 --password 'CompPass1!' --shell --json")
-    run_smb_zfs_command("create user comp_user2 --password 'CompPass2!' --json")
-    run_smb_zfs_command("create user comp_user3 --password 'CompPass3!' --no-home --json")
+    run_smb_zfs_command(
+        "create user comp_user1 --password 'CompPass1!' --shell --json")
+    run_smb_zfs_command(
+        "create user comp_user2 --password 'CompPass2!' --json")
+    run_smb_zfs_command(
+        "create user comp_user3 --password 'CompPass3!' --no-home --json")
 
     # Create groups
-    run_smb_zfs_command("create group comp_group1 --description 'Comprehensive group 1' --json")
-    run_smb_zfs_command("create group comp_group2 --description 'Comprehensive group 2' --users comp_user1,comp_user2 --json")
+    run_smb_zfs_command(
+        "create group comp_group1 --description 'Comprehensive group 1' --json")
+    run_smb_zfs_command(
+        "create group comp_group2 --description 'Comprehensive group 2' --users comp_user1,comp_user2 --json")
 
     # Create shares
-    run_smb_zfs_command("create share comp_share1 --dataset shares/comp_share1 --comment 'Comprehensive share 1' --json")
-    run_smb_zfs_command("create share comp_share2 --dataset shares/comp_share2 --pool secondary_testpool --valid-users comp_user1,@comp_group1 --readonly --quota 50G --json")
+    run_smb_zfs_command(
+        "create share comp_share1 --dataset shares/comp_share1 --comment 'Comprehensive share 1' --json")
+    run_smb_zfs_command(
+        "create share comp_share2 --dataset shares/comp_share2 --pool secondary_testpool --valid-users comp_user1,@comp_group1 --readonly --quota 50G --json")
