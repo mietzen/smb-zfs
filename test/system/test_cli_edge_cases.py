@@ -483,7 +483,9 @@ def test_system_user_integration(initial_state):
     assert '/bin/bash' in user_shell  # Should have shell when --shell is used
 
     # Verify user is in smb_users group (created during setup)
-    assert 'smb_users' in user_shell
+    user_details = get_system_user_details('sys_user')
+    assert user_details is not None
+    assert 'smb_users' in user_details
 
 
 def test_comprehensive_workflow(initial_state):
