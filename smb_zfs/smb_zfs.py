@@ -751,7 +751,7 @@ class SmbZfsManager:
             if self._system.group_exists("smb_users"):
                 self._system.delete_system_group("smb_users")
 
-        if delete_data and primary_pool:
+        if delete_data:
             for share_info in shares.values():
                 if "dataset" in share_info:
                     self._zfs.destroy_dataset(share_info["dataset"]["name"])

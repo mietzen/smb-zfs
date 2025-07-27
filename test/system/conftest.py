@@ -140,23 +140,16 @@ def manage_smb_zfs_environment():
     """Fixture to set up and tear down smb-zfs for each test."""
     # Setup: Ensure a clean state before setting up
     try:
+        run_smb_zfs_command("setup --primary-pool primary_testpool --secondary-pools secondary_testpool tertiary_testpool --server-name TESTSERVER --workgroup TESTGROUP")
+        yield
         run_smb_zfs_command("remove --delete-users --delete-data --yes")
-    except subprocess.CalledProcessError:
-        # Ignore errors if it's already clean
+    finally:
         pass
-
-    # Setup smb-zfs. The 'setup' command does not have a '--yes' flag.
-    run_smb_zfs_command("setup --primary-pool primary_testpool --secondary-pools secondary_testpool tertiary_testpool --server-name TESTSERVER --workgroup TESTGROUP")
-
-    yield
-
-    # Teardown: Clean up completely after each test
-    run_smb_zfs_command("remove --delete-users --delete-data --yes")
-    delete_all_datasets([
-        "primary_testpool",
-        "secondary_testpool",
-        "tertiary_testpool",
-    ])
+        # delete_all_datasets([
+        #     "primary_testpool",
+        #     "secondary_testpool",
+        #     "tertiary_testpool",
+        # ])
 
 
 def delete_all_datasets(pools):
