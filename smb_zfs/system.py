@@ -1,6 +1,7 @@
 import grp
 import pwd
 import subprocess
+import shlex
 
 from .errors import SmbZfsError
 from .const import SMB_CONF
@@ -21,7 +22,7 @@ class System:
                 capture_output=True,
                 text=True,
                 check=check,
-                shell=False  # Explicitly disable the shell
+                shell=False
             )
             return process
         except FileNotFoundError as e:
@@ -33,11 +34,62 @@ class System:
             )
             raise SmbZfsError(error_message) from e
 
+
+    def _run_piped(self, commands):
+        try:
+            procs = []
+            proc_stdin = None
+
+            for cmd in commands:
+                if isinstance(cmd, str):
+                    cmd = cmd.split()
+
+                proc = subprocess.Popen(
+                    cmd,
+                    stdin=proc_stdin,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE
+                )
+                procs.append(proc)
+
+                if len(procs) > 1:
+                    procs[-2].stdout.close()
+
+                proc_stdin = proc.stdout
+
+            last_proc = procs[-1]
+            stdout, stderr = last_proc.communicate()
+
+            for proc in procs[:-1]:
+                proc.wait()
+
+            # Now, check the return code of every process in the chain
+            for proc in procs:
+                if proc.returncode != 0:
+                    error_message = (
+                        f"Command '{' '.join(proc.args)}' failed with exit code {proc.returncode}.\n"
+                        f"Final Stderr: {stderr.decode().strip()}"
+                    )
+                    raise SmbZfsError(error_message)
+
+            # If we get here, all commands succeeded.
+            return subprocess.CompletedProcess(
+                args=last_proc.args,
+                returncode=last_proc.returncode,
+                stdout=stdout,
+                stderr=stderr
+            )
+
+        except FileNotFoundError as e:
+            raise SmbZfsError(f"Command not found: {e.filename}") from e
+
+
     def is_package_installed(self, package_name):
         """Checks if a Debian package is installed using dpkg-query."""
         # Use check=False to handle cases where the package is not found
         result = self._run(
-            ["dpkg-query", "--show", "--showformat=${db:Status-Status}", package_name],
+            ["dpkg-query", "--show",
+                "--showformat=${db:Status-Status}", package_name],
             check=False
         )
         return result.returncode == 0 and result.stdout.strip() == "installed"
@@ -102,7 +154,8 @@ class System:
         return f"{username}:" in result.stdout
 
     def set_samba_password(self, username, password):
-        self._run(["smbpasswd", "-s", username], input_data=f"{password}\n{password}")
+        self._run(["smbpasswd", "-s", username],
+                  input_data=f"{password}\n{password}")
 
     def test_samba_config(self):
         self._run(["testparm", "-s", SMB_CONF])
@@ -117,7 +170,9 @@ class System:
         self._run(["systemctl", "enable", "smbd", "nmbd", "avahi-daemon"])
 
     def stop_services(self):
-        self._run(["systemctl", "stop", "smbd", "nmbd", "avahi-daemon"], check=False)
+        self._run(["systemctl", "stop", "smbd",
+                  "nmbd", "avahi-daemon"], check=False)
 
     def disable_services(self):
-        self._run(["systemctl", "disable", "smbd", "nmbd", "avahi-daemon"], check=False)
+        self._run(["systemctl", "disable", "smbd",
+                  "nmbd", "avahi-daemon"], check=False)
