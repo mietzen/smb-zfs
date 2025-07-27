@@ -160,7 +160,8 @@ def manage_smb_zfs_environment():
         yield
         run_smb_zfs_command("remove --delete-users --delete-data --yes")
     finally:
-        os.remove(STATE_FILE)
+        if os.path.exists(STATE_FILE):
+            os.remove(STATE_FILE)
         cleanup_test_datasets([
             "primary_testpool",
             "secondary_testpool",
