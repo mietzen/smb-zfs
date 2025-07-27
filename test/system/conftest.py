@@ -114,6 +114,17 @@ def get_zfs_dataset_exists(dataset):
     except subprocess.CalledProcessError:
         return False
 
+def get_zfs_dataset(pool):
+    """Check if a ZFS dataset exists."""
+    result = subprocess.run(
+            ["zfs", "list", "-H", "-o", "name", "-r", pool],
+            check=True,
+            capture_output=True,
+            text=True,
+            encoding='utf-8'
+        )
+    return result.stdout.strip().splitlines()[1:]
+
 
 def read_smb_conf():
     """Read the contents of the smb.conf file."""
@@ -129,7 +140,6 @@ def manage_smb_zfs_environment():
     """Fixture to set up and tear down smb-zfs for each test."""
     # Setup: Ensure a clean state before setting up
     try:
-        # The 'remove' command correctly uses '--yes'
         run_smb_zfs_command("remove --delete-users --delete-data --yes")
     except subprocess.CalledProcessError:
         # Ignore errors if it's already clean
@@ -142,6 +152,27 @@ def manage_smb_zfs_environment():
 
     # Teardown: Clean up completely after each test
     run_smb_zfs_command("remove --delete-users --delete-data --yes")
+    delete_all_datasets([
+        "primary_testpool",
+        "secondary_testpool",
+        "tertiary_testpool",
+    ])
+
+
+def delete_all_datasets(pools):
+    for pool in pools:
+        try:
+            for dataset in reversed(get_zfs_dataset(pool)):
+                try:
+                    print(f"Teardown: Destroying ZFS dataset '{dataset}'")
+                    # Use -r to recursively destroy snapshots and children
+                    subprocess.run(["zfs", "destroy", "-r", dataset], check=True)
+                except subprocess.CalledProcessError as e_destroy:
+                    print(f"Warning: Failed to destroy dataset {dataset}: {e_destroy}")
+
+        except subprocess.CalledProcessError as e_list:
+            # This might happen if a pool doesn't exist.
+            print(f"Warning: Failed to list datasets for pool {pool}: {e_list}")
 
 
 @pytest.fixture
