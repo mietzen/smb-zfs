@@ -12,7 +12,7 @@ from conftest import (
 def test_create_user_basic(initial_state):
     """Test creating a simple user."""
     run_smb_zfs_command(
-        "create user testuser1 --password 'SecretPassword!' --json")
+        "create user sztest_testuser1 --password 'SecretPassword!' --json")
     final_state = run_smb_zfs_command("get-state")
 
     assert 'testuser1' in final_state['users']
@@ -24,7 +24,7 @@ def test_create_user_basic(initial_state):
 def test_create_user_no_home(initial_state):
     """Test creating a user with no home directory."""
     run_smb_zfs_command(
-        "create user nohomeuser --password 'SecretPassword!' --no-home --json")
+        "create user sztest_nohomeuser --password 'SecretPassword!' --no-home --json")
     final_state = run_smb_zfs_command("get-state")
 
     assert 'nohomeuser' in final_state['users']
@@ -37,7 +37,7 @@ def test_create_user_no_home(initial_state):
 def test_create_user_with_shell(initial_state):
     """Test creating a user with shell enabled."""
     run_smb_zfs_command(
-        "create user shelluser --password 'SecretPassword!' --shell --json")
+        "create user sztest_shelluser --password 'SecretPassword!' --shell --json")
     final_state = run_smb_zfs_command("get-state")
 
     assert 'shelluser' in final_state['users']
@@ -50,7 +50,7 @@ def test_create_user_with_shell(initial_state):
 def test_delete_user_basic(initial_state):
     """Test deleting a user."""
     run_smb_zfs_command(
-        "create user todelete --password 'SecretPassword!' --json")
+        "create user sztest_todelete --password 'SecretPassword!' --json")
     assert get_system_user_details('todelete') is not None
 
     run_smb_zfs_command("delete user todelete --yes --json")
@@ -63,7 +63,7 @@ def test_delete_user_basic(initial_state):
 def test_delete_user_with_data(initial_state):
     """Test deleting a user and their data."""
     run_smb_zfs_command(
-        "create user datadelete --password 'SecretPassword!' --json")
+        "create user sztest_datadelete --password 'SecretPassword!' --json")
     assert get_zfs_property(
         'primary_testpool/homes/datadelete', 'type') == 'filesystem'
 
@@ -79,7 +79,7 @@ def test_delete_user_with_data(initial_state):
 def test_create_group_basic(initial_state):
     """Test creating a group."""
     run_smb_zfs_command(
-        "create group testgroup1 --description 'A test group' --json")
+        "create group sztest_testgroup1 --description 'A test group' --json")
     final_state = run_smb_zfs_command("get-state")
 
     assert 'testgroup1' in final_state['groups']
@@ -90,12 +90,12 @@ def test_create_group_with_users(initial_state):
     """Test creating a group with initial users."""
     # Create users first
     run_smb_zfs_command(
-        "create user groupuser1 --password 'SecretPassword!' --json")
+        "create user sztest_groupuser1 --password 'SecretPassword!' --json")
     run_smb_zfs_command(
-        "create user groupuser2 --password 'SecretPassword!' --json")
+        "create user sztest_groupuser2 --password 'SecretPassword!' --json")
 
     run_smb_zfs_command(
-        "create group testgroup2 --description 'Group with users' --users groupuser1,groupuser2 --json")
+        "create group sztest_testgroup2 --description 'Group with users' --users groupuser1,groupuser2 --json")
     final_state = run_smb_zfs_command("get-state")
 
     assert 'testgroup2' in final_state['groups']
@@ -110,7 +110,7 @@ def test_create_group_with_users(initial_state):
 def test_delete_group_basic(initial_state):
     """Test deleting a group."""
     run_smb_zfs_command(
-        "create group groupdel --description 'Delete me' --json")
+        "create group sztest_groupdel --description 'Delete me' --json")
     assert get_system_group_exists('groupdel')
 
     run_smb_zfs_command("delete group groupdel --json")
@@ -139,7 +139,7 @@ def test_create_share_basic(initial_state):
 def test_create_share_with_permissions(initial_state):
     """Test creating a share with specific users and permissions."""
     run_smb_zfs_command(
-        "create user shareuser --password 'SecretPassword!' --json")
+        "create user sztest_shareuser --password 'SecretPassword!' --json")
     run_smb_zfs_command(
         "create share restrictedshare --dataset shares/restrictedshare --pool secondary_testpool --valid-users shareuser --readonly --no-browse --json")
     final_state = run_smb_zfs_command("get-state")

@@ -79,7 +79,7 @@ def test_modify_setup_change_primary_pool(initial_state):
     """Test changing the primary pool with data migration."""
     # Create a user first to have data to migrate
     run_smb_zfs_command(
-        "create user migrateuser --password 'TestPassword!' --json")
+        "create user sztest_migrateuser --password 'TestPassword!' --json")
 
     datasets = subprocess.run(
         f"zfs list",
@@ -130,7 +130,7 @@ def test_modify_setup_default_home_quota(initial_state):
 
     # New users should get the default quota
     run_smb_zfs_command(
-        "create user quotauser --password 'TestPassword!' --json")
+        "create user sztest_quotauser --password 'TestPassword!' --json")
 
     # Check that the quota was applied (this depends on implementation)
     # In a real test, you'd verify the ZFS quota was set
@@ -144,7 +144,7 @@ def test_remove_command_complete(initial_state):
     """
     # Create a user to ensure there's something to delete
     run_smb_zfs_command(
-        "create user testuser --password TestPassword123 --json")
+        "create user sztest_testuser --password TestPassword123 --json")
     assert get_system_user_exists('testuser')
 
     # Run remove
@@ -162,7 +162,7 @@ def test_remove_partial_cleanup(initial_state):
     """Test remove command with partial cleanup options."""
     # Create test data
     run_smb_zfs_command(
-        "create user removeuser --password 'TestPassword!' --json")
+        "create user sztest_removeuser --password 'TestPassword!' --json")
     run_smb_zfs_command(
         "create share removeshare --dataset shares/removeshare --json")
 
@@ -188,7 +188,7 @@ def test_remove_data_only():
 
     # Create test data
     run_smb_zfs_command(
-        "create user datauser --password 'TestPassword!' --json")
+        "create user sztest_datauser --password 'TestPassword!' --json")
     run_smb_zfs_command(
         "create share datashare --dataset shares/datashare --json")
 

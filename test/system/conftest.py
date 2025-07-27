@@ -1,3 +1,5 @@
+import pwd
+import grp
 import io
 import json
 import os
@@ -156,19 +158,37 @@ def manage_smb_zfs_environment():
         run_smb_zfs_command(
             "setup --primary-pool primary_testpool --secondary-pools secondary_testpool tertiary_testpool --server-name TESTSERVER --workgroup TESTGROUP")
         yield
-        # <- This is not working!
         run_smb_zfs_command("remove --delete-users --delete-data --yes")
     finally:
-        run_smb_zfs_command("remove --delete-users --delete-data --yes")
         os.remove(STATE_FILE)
-        # delete_all_datasets([
-        #     "primary_testpool",
-        #     "secondary_testpool",
-        #     "tertiary_testpool",
-        # ])
+        cleanup_test_datasets([
+            "primary_testpool",
+            "secondary_testpool",
+            "tertiary_testpool",
+        ])
+        cleanup_test_users_and_groups("sztest_")
 
 
-def delete_all_datasets(pools):
+def cleanup_test_users_and_groups(prefix):
+    # Delete users starting with prefix
+    for user in pwd.getpwall():
+        if user.pw_name.startswith(prefix):
+            try:
+                subprocess.run(["userdel", "-r", user.pw_name], check=True)
+                print(f"Deleted user: {user.pw_name}")
+            except subprocess.CalledProcessError as e:
+                print(f"Failed to delete user {user.pw_name}: {e}")
+    # Delete groups starting with prefix
+    for group in grp.getgrall():
+        if group.gr_name.startswith(prefix):
+            try:
+                subprocess.run(["groupdel", group.gr_name], check=True)
+                print(f"Deleted group: {group.gr_name}")
+            except subprocess.CalledProcessError as e:
+                print(f"Failed to delete group {group.gr_name}: {e}")
+
+
+def cleanup_test_datasets(pools):
     for pool in pools:
         try:
             for dataset in reversed(get_zfs_dataset(pool)):
@@ -197,11 +217,11 @@ def initial_state():
 @pytest.fixture
 def basic_users_and_groups():
     """Fixture to create basic users and groups for testing."""
-    run_smb_zfs_command("create user user_a --password 'PassA!' --json")
-    run_smb_zfs_command("create user user_b --password 'PassB!' --json")
-    run_smb_zfs_command("create user user_c --password 'PassC!' --json")
+    run_smb_zfs_command("create user sztest_user_a --password 'PassA!' --json")
+    run_smb_zfs_command("create user sztest_user_b --password 'PassB!' --json")
+    run_smb_zfs_command("create user sztest_user_c --password 'PassC!' --json")
     run_smb_zfs_command(
-        "create group test_group --description 'A test group' --json")
+        "create group sztest_test_group --description 'A test group' --json")
 
 
 @pytest.fixture
@@ -209,17 +229,17 @@ def comprehensive_setup():
     """Fixture to create a comprehensive test environment."""
     # Create users
     run_smb_zfs_command(
-        "create user comp_user1 --password 'CompPass1!' --shell --json")
+        "create user sztest_comp_user1 --password 'CompPass1!' --shell --json")
     run_smb_zfs_command(
-        "create user comp_user2 --password 'CompPass2!' --json")
+        "create user sztest_comp_user2 --password 'CompPass2!' --json")
     run_smb_zfs_command(
-        "create user comp_user3 --password 'CompPass3!' --no-home --json")
+        "create user sztest_comp_user3 --password 'CompPass3!' --no-home --json")
 
     # Create groups
     run_smb_zfs_command(
-        "create group comp_group1 --description 'Comprehensive group 1' --json")
+        "create group sztest_comp_group1 --description 'Comprehensive group 1' --json")
     run_smb_zfs_command(
-        "create group comp_group2 --description 'Comprehensive group 2' --users comp_user1,comp_user2 --json")
+        "create group sztest_comp_group2 --description 'Comprehensive group 2' --users comp_user1,comp_user2 --json")
 
     # Create shares
     run_smb_zfs_command(

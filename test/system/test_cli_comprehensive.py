@@ -13,8 +13,8 @@ def test_json_output_format(comprehensive_setup):
     """Test that all commands with --json flag return valid JSON."""
     # Test various commands return valid JSON
     commands = [
-        "create user json_test --password 'JsonTest!' --json",
-        "create group json_group --json",
+        "create user sztest_json_test --password 'JsonTest!' --json",
+        "create group sztest_json_group --json",
         "create share json_share --dataset shares/json_share --json",
         "modify group comp_group1 --add-users comp_user1 --json",
         "modify share comp_share1 --comment 'Modified via JSON' --json",
@@ -37,14 +37,14 @@ def test_duplicate_user_creation(comprehensive_setup):
     """Test creating duplicate users returns appropriate error."""
     with pytest.raises(subprocess.CalledProcessError):
         run_smb_zfs_command(
-            "create user comp_user1 --password 'DuplicatePass!' --json")
+            "create user sztest_comp_user1 --password 'DuplicatePass!' --json")
 
 
 def test_duplicate_group_creation(comprehensive_setup):
     """Test creating duplicate groups returns appropriate error."""
     with pytest.raises(subprocess.CalledProcessError):
         run_smb_zfs_command(
-            "create group comp_group1 --description 'Duplicate group' --json")
+            "create group sztest_comp_group1 --description 'Duplicate group' --json")
 
 
 def test_duplicate_share_creation(comprehensive_setup):
@@ -220,9 +220,9 @@ def test_special_characters_in_names(comprehensive_setup):
     """Test handling of special characters in names."""
     # Test with underscores and numbers (should work)
     run_smb_zfs_command(
-        "create user test_user_123 --password 'TestPass!' --json")
+        "create user sztest_test_user_123 --password 'TestPass!' --json")
     run_smb_zfs_command(
-        "create group test_group_456 --description 'Test group with numbers' --json")
+        "create group sztest_test_group_456 --description 'Test group with numbers' --json")
 
     state = run_smb_zfs_command("get-state")
     assert 'test_user_123' in state['users']
@@ -234,7 +234,7 @@ def test_long_descriptions_and_comments(comprehensive_setup):
     long_description = "This is a very long description that contains many words and should test the handling of lengthy text in group descriptions and share comments."
 
     run_smb_zfs_command(
-        f"create group long_desc_group --description '{long_description}' --json")
+        f"create group sztest_long_desc_group --description '{long_description}' --json")
     run_smb_zfs_command(
         f"create share long_comment_share --dataset shares/long_comment_share --comment '{long_description}' --json")
 
@@ -250,7 +250,7 @@ def test_state_consistency_after_operations(comprehensive_setup):
 
     # Perform various operations
     run_smb_zfs_command(
-        "create user state_test --password 'StateTest!' --json")
+        "create user sztest_state_test --password 'StateTest!' --json")
     run_smb_zfs_command(
         "modify group comp_group1 --add-users state_test --json")
     run_smb_zfs_command(
@@ -270,8 +270,8 @@ def test_cleanup_operations(comprehensive_setup):
     """Test that cleanup operations work correctly."""
     # Create temporary resources
     run_smb_zfs_command(
-        "create user cleanup_user --password 'CleanupPass!' --json")
-    run_smb_zfs_command("create group cleanup_group --json")
+        "create user sztest_cleanup_user --password 'CleanupPass!' --json")
+    run_smb_zfs_command("create group sztest_cleanup_group --json")
     run_smb_zfs_command(
         "create share cleanup_share --dataset shares/cleanup_share --json")
 

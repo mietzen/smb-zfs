@@ -43,12 +43,12 @@ def test_share_without_explicit_pool(initial_state):
 def test_user_with_groups_flag(initial_state):
     """Test creating user with initial groups."""
     # Create groups first
-    run_smb_zfs_command("create group initial_group1 --json")
-    run_smb_zfs_command("create group initial_group2 --json")
+    run_smb_zfs_command("create group sztest_initial_group1 --json")
+    run_smb_zfs_command("create group sztest_initial_group2 --json")
 
-    # Create user with initial groups
+    # create user sztest_with initial groups
     run_smb_zfs_command(
-        "create user grouped_user --password 'GroupedPass!' --groups initial_group1,initial_group2 --json")
+        "create user sztest_grouped_user --password 'GroupedPass!' --groups initial_group1,initial_group2 --json")
 
     user_details = get_system_user_details('grouped_user')
     assert 'initial_group1' in user_details
@@ -59,13 +59,13 @@ def test_user_shell_variations(initial_state):
     """Test different shell configurations."""
     # User with shell enabled
     run_smb_zfs_command(
-        "create user shell_user --password 'ShellPass!' --shell --json")
+        "create user sztest_shell_user --password 'ShellPass!' --shell --json")
     user_shell = get_system_user_shell('shell_user')
     assert '/bin/bash' in user_shell
 
     # User without shell (default)
     run_smb_zfs_command(
-        "create user noshell_user --password 'NoShellPass!' --json")
+        "create user sztest_noshell_user --password 'NoShellPass!' --json")
     user_details = get_system_user_details('noshell_user')
     # Should have restricted shell (implementation dependent)
 
@@ -75,10 +75,10 @@ def test_share_permission_combinations(initial_state):
     """Test various combinations of share permissions."""
     # Create users for testing
     run_smb_zfs_command(
-        "create user perm_user1 --password 'PermPass1!' --json")
+        "create user sztest_perm_user1 --password 'PermPass1!' --json")
     run_smb_zfs_command(
-        "create user perm_user2 --password 'PermPass2!' --json")
-    run_smb_zfs_command("create group perm_group --json")
+        "create user sztest_perm_user2 --password 'PermPass2!' --json")
+    run_smb_zfs_command("create group sztest_perm_group --json")
 
     # Share with user and group permissions
     run_smb_zfs_command(
@@ -107,7 +107,7 @@ def test_share_permission_combinations(initial_state):
 def test_quota_format_variations(initial_state):
     """Test different quota format specifications."""
     run_smb_zfs_command(
-        "create user quota_user --password 'QuotaPass!' --json")
+        "create user sztest_quota_user --password 'QuotaPass!' --json")
 
     # Test different quota formats
     quota_formats = ['1G', '512M', '2T', '500G']
@@ -140,10 +140,10 @@ def test_share_quota_variations(initial_state):
 def test_group_membership_complex_operations(initial_state):
     """Test complex group membership operations."""
     # Create users and groups
-    run_smb_zfs_command("create user member1 --password 'Member1!' --json")
-    run_smb_zfs_command("create user member2 --password 'Member2!' --json")
-    run_smb_zfs_command("create user member3 --password 'Member3!' --json")
-    run_smb_zfs_command("create group complex_group --json")
+    run_smb_zfs_command("create user sztest_member1 --password 'Member1!' --json")
+    run_smb_zfs_command("create user sztest_member2 --password 'Member2!' --json")
+    run_smb_zfs_command("create user sztest_member3 --password 'Member3!' --json")
+    run_smb_zfs_command("create group sztest_complex_group --json")
 
     # Add multiple users at once
     run_smb_zfs_command(
@@ -168,9 +168,9 @@ def test_get_state_comprehensive(initial_state):
     """Test comprehensive state retrieval."""
     # Create various resources
     run_smb_zfs_command(
-        "create user state_user --password 'StatePass!' --json")
+        "create user sztest_state_user --password 'StatePass!' --json")
     run_smb_zfs_command(
-        "create group state_group --description 'State test group' --json")
+        "create group sztest_state_group --description 'State test group' --json")
     run_smb_zfs_command(
         "create share state_share --dataset shares/state_share --comment 'State test share' --json")
 
@@ -201,7 +201,7 @@ def test_invalid_pool_operations(initial_state):
 def test_invalid_user_references(initial_state):
     """Test operations referencing invalid users."""
     # Try to add non-existent user to group
-    run_smb_zfs_command("create group test_group --json")
+    run_smb_zfs_command("create group sztest_test_group --json")
     with pytest.raises(subprocess.CalledProcessError):
         run_smb_zfs_command(
             "modify group test_group --add-users nonexistent_user --json")
@@ -236,8 +236,8 @@ def test_multiple_operations_sequence(initial_state):
     """Test sequence of multiple operations."""
     # Simulate a workflow of operations
     operations = [
-        "create user workflow_user --password 'WorkflowPass!' --json",
-        "create group workflow_group --description 'Workflow group' --json",
+        "create user sztest_workflow_user --password 'WorkflowPass!' --json",
+        "create group sztest_workflow_group --description 'Workflow group' --json",
         "modify group workflow_group --add-users workflow_user --json",
         "create share workflow_share --dataset shares/workflow_share --valid-users @workflow_group --json",
         "modify share workflow_share --comment 'Modified workflow share' --quota 15G --json",
@@ -301,8 +301,8 @@ def test_modify_setup_boolean_variations(initial_state):
 def test_delete_user_with_group_membership(initial_state):
     """Test deleting user who is member of groups."""
     run_smb_zfs_command(
-        "create user member_user --password 'MemberPass!' --json")
-    run_smb_zfs_command("create group member_group --users member_user --json")
+        "create user sztest_member_user --password 'MemberPass!' --json")
+    run_smb_zfs_command("create group sztest_member_group --users member_user --json")
 
     # Verify user is in group
     assert 'member_group' in get_system_user_details('member_user')
@@ -319,9 +319,9 @@ def test_delete_user_with_group_membership(initial_state):
 def test_delete_group_with_members(initial_state):
     """Test deleting group that has members."""
     run_smb_zfs_command(
-        "create user group_member --password 'GroupMemberPass!' --json")
+        "create user sztest_group_member --password 'GroupMemberPass!' --json")
     run_smb_zfs_command(
-        "create group member_group --users group_member --json")
+        "create group sztest_member_group --users group_member --json")
 
     # Delete group
     run_smb_zfs_command("delete group member_group --json")
@@ -335,7 +335,7 @@ def test_delete_group_with_members(initial_state):
 def test_delete_share_with_dependencies(initial_state):
     """Test deleting share that's referenced by users."""
     run_smb_zfs_command(
-        "create user share_user --password 'ShareUserPass!' --json")
+        "create user sztest_share_user --password 'ShareUserPass!' --json")
     run_smb_zfs_command(
         "create share dependent_share --dataset shares/dependent_share --valid-users share_user --json")
 
@@ -363,10 +363,10 @@ def test_remove_with_complex_setup():
 
     # Add complex data
     run_smb_zfs_command(
-        "create user complex1 --password 'Complex1!' --shell --json")
+        "create user sztest_complex1 --password 'Complex1!' --shell --json")
     run_smb_zfs_command(
-        "create user complex2 --password 'Complex2!' --no-home --json")
-    run_smb_zfs_command("create group complex_group --users complex1 --json")
+        "create user sztest_complex2 --password 'Complex2!' --no-home --json")
+    run_smb_zfs_command("create group sztest_complex_group --users complex1 --json")
     run_smb_zfs_command(
         "create share complex_share1 --dataset shares/complex_share1 --pool primary_testpool --json")
     run_smb_zfs_command(
@@ -414,9 +414,9 @@ def test_password_security_handling(initial_state):
     # Test that passwords aren't exposed in process lists or error messages
     # This is more of a security test and would need special verification
 
-    # Create user with password
+    # create user with password
     run_smb_zfs_command(
-        "create user security_user --password 'SecretPassword123!' --json")
+        "create user sztest_security_user --password 'SecretPassword123!' --json")
 
     # Verify user was created successfully
     assert get_system_user_details('security_user') is not None
@@ -427,7 +427,7 @@ def test_dataset_structure_consistency(initial_state):
     """Test that dataset structure is consistent."""
     # Create resources and verify dataset structure
     run_smb_zfs_command(
-        "create user struct_user --password 'StructPass!' --json")
+        "create user sztest_struct_user --password 'StructPass!' --json")
     run_smb_zfs_command(
         "create share struct_share --dataset shares/struct_share --json")
 
@@ -475,7 +475,7 @@ def test_smb_conf_consistency(initial_state):
 def test_system_user_integration(initial_state):
     """Test integration with system user management."""
     run_smb_zfs_command(
-        "create user sys_user --password 'SysPass!' --shell --json")
+        "create user sztest_sys_user --password 'SysPass!' --shell --json")
 
     # Verify system user exists and has correct properties
     user_shell = get_system_user_shell('sys_user')
@@ -496,7 +496,7 @@ def test_comprehensive_workflow(initial_state):
     departments = ['engineering', 'marketing', 'finance']
     for dept in departments:
         run_smb_zfs_command(
-            f"create group {dept} --description '{dept.capitalize()} department' --json")
+            f"create group sztest_{dept} --description '{dept.capitalize()} department' --json")
 
     # 2. Create users for each department
     users = [
@@ -508,7 +508,7 @@ def test_comprehensive_workflow(initial_state):
 
     for username, dept in users:
         run_smb_zfs_command(
-            f"create user {username} --password '{username.capitalize()}Pass!' --shell --json")
+            f"create user sztest_{username} --password '{username.capitalize()}Pass!' --shell --json")
         run_smb_zfs_command(
             f"modify group {dept} --add-users {username} --json")
 
