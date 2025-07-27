@@ -20,7 +20,7 @@ class Zfs:
     def dataset_exists(self, dataset: str) -> bool:
         """Checks if a ZFS dataset or volume exists."""
         result = self._system._run(
-            ["zfs", "list", "-H", "-o", "name", "-t", "filesystem,volume", dataset],
+            ["zfs", "list", "-H", "-o", "name", "-t", "filesystem", dataset],
             check=False
         )
         return result.returncode == 0

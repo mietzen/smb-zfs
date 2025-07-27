@@ -748,8 +748,6 @@ class SmbZfsManager:
             for groupname in groups:
                 if self._system.group_exists(groupname):
                     self._system.delete_system_group(groupname)
-            if self._system.group_exists("smb_users"):
-                self._system.delete_system_group("smb_users")
 
         if delete_data:
             for share_info in shares.values():
@@ -772,7 +770,4 @@ class SmbZfsManager:
                     print(
                         f"Warning: could not remove file {f}: {e}", file=sys.stderr)
 
-        # Manually clear the state since the file is being deleted
-        self._state._initialize_state_file()
-
-        return {"msg": "Removal completed successfully.", "state": self._state.get_data_copy()}
+        return {"msg": "Removal completed successfully.", "state": {}}
