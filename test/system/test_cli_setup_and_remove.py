@@ -87,6 +87,10 @@ def test_modify_setup_change_primary_pool(initial_state):
         check=True,
         capture_output=True)
 
+    print(datasets)
+    # Fail here
+    assert datasets == 1
+
     pools = subprocess.run(
         f"zpool list",
         shell=True,
