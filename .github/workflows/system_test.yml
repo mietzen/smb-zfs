@@ -54,10 +54,9 @@ jobs:
       - name: '[Container] Start system test'
         run: |
           docker exec -i debian bash << 'EOF'
-          export CI=1
-          export BUILD_NUMBER=
+          export BUILD_NUMBER=${{ github.run_id }}
           source .venv/bin/activate
-          pytest -vv ./test/system --junit-xml=system-test-results.xml
+          pytest ./test/system --junit-xml=system-test-results.xml --verbosity="2" -s
           EOF
       - name: Surface failing tests
         if: always()
