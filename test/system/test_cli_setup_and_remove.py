@@ -105,7 +105,7 @@ def test_modify_setup_change_primary_pool(initial_state):
 
     assert final_state['primary_pool'] == 'secondary_testpool'
     # User data should now be on the new primary pool
-    assert get_zfs_dataset_exists('secondary_testpool/homes/migrateuser')
+    assert get_zfs_dataset_exists('secondary_testpool/homes/sztest_migrateuser')
 
 
 def test_modify_setup_macos_toggle(initial_state):
@@ -170,8 +170,8 @@ def test_remove_partial_cleanup(initial_state):
     run_smb_zfs_command("remove --delete-users --yes --json")
 
     # Users should be gone but datasets should remain
-    assert not get_system_user_exists('removeuser')
-    assert get_zfs_dataset_exists('primary_testpool/homes/removeuser')
+    assert not get_system_user_exists('sztest_removeuser')
+    assert get_zfs_dataset_exists('primary_testpool/homes/sztest_removeuser')
     assert get_zfs_dataset_exists('primary_testpool/shares/removeshare')
 
 
@@ -196,8 +196,8 @@ def test_remove_data_only():
     run_smb_zfs_command("remove --delete-data --yes --json")
 
     # Users should still exist but datasets should be gone
-    assert get_system_user_exists('datauser')
-    assert not get_zfs_dataset_exists('primary_testpool/homes/datauser')
+    assert get_system_user_exists('sztest_datauser')
+    assert not get_zfs_dataset_exists('primary_testpool/homes/sztest_datauser')
     assert not get_zfs_dataset_exists('primary_testpool/shares/datashare')
 
     # Clean up

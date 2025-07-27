@@ -115,12 +115,12 @@ def test_quota_format_variations(initial_state):
     for i, quota in enumerate(quota_formats):
         run_smb_zfs_command(f"modify home sztest_quota_user --quota {quota} --json")
         assert get_zfs_property(
-            'primary_testpool/homes/quota_user', 'quota') == quota
+            'primary_testpool/homes/sztest_quota_user', 'quota') == quota
 
     # Test removing quota
     run_smb_zfs_command("modify home sztest_quota_user --quota none --json")
     assert get_zfs_property(
-        'primary_testpool/homes/quota_user', 'quota') == 'none'
+        'primary_testpool/homes/sztest_quota_user', 'quota') == 'none'
 
 
 def test_share_quota_variations(initial_state):
@@ -251,14 +251,14 @@ def test_multiple_operations_sequence(initial_state):
     # Verify final state
     final_state = run_smb_zfs_command("get-state")
 
-    assert 'workflow_user' in final_state['users']
+    assert 'sztest_workflow_user' in final_state['users']
     assert 'workflow_group' in final_state['groups']
     assert 'workflow_share' in final_state['shares']
     assert final_state['shares']['workflow_share']['smb_config']['comment'] == 'Modified workflow share'
     assert get_zfs_property(
         'primary_testpool/shares/workflow_share', 'quota') == '15G'
     assert get_zfs_property(
-        'primary_testpool/homes/workflow_user', 'quota') == '5G'
+        'primary_testpool/homes/sztest_workflow_user', 'quota') == '5G'
 
 
 # --- Boolean Flag Modification Tests ---
@@ -363,10 +363,10 @@ def test_remove_with_complex_setup():
 
     # Add complex data
     run_smb_zfs_command(
-        "create user sztest_complex1 --password 'Complex1!' --shell --json")
+        "create user sztest_complex1 --password 'sztest_complex1!' --shell --json")
     run_smb_zfs_command(
         "create user sztest_complex2 --password 'Complex2!' --no-home --json")
-    run_smb_zfs_command("create group sztest_complex_group --users complex1 --json")
+    run_smb_zfs_command("create group sztest_complex_group --users sztest_complex1 --json")
     run_smb_zfs_command(
         "create share complex_share1 --dataset shares/complex_share1 --pool primary_testpool --json")
     run_smb_zfs_command(
@@ -377,11 +377,11 @@ def test_remove_with_complex_setup():
 
     # Verify users gone, data remains
     with pytest.raises(subprocess.CalledProcessError):
-        get_system_user_details('complex1')
+        get_system_user_details('sztest_complex1')
 
     # Datasets should still exist
     assert get_zfs_property(
-        'primary_testpool/homes/complex1', 'type') == 'filesystem'
+        'primary_testpool/homes/sztest_complex1', 'type') == 'filesystem'
     assert get_zfs_property(
         'primary_testpool/shares/complex_share1', 'type') == 'filesystem'
 
@@ -433,13 +433,13 @@ def test_dataset_structure_consistency(initial_state):
 
     # Verify consistent naming structure
     assert get_zfs_property(
-        'primary_testpool/homes/struct_user', 'type') == 'filesystem'
+        'primary_testpool/homes/sztest_struct_user', 'type') == 'filesystem'
     assert get_zfs_property(
         'primary_testpool/shares/struct_share', 'type') == 'filesystem'
 
     # Verify mountpoints are correct
     assert get_zfs_property(
-        'primary_testpool/homes/struct_user', 'mountpoint') == '/primary_testpool/homes/struct_user'
+        'primary_testpool/homes/sztest_struct_user', 'mountpoint') == '/primary_testpool/homes/sztest_struct_user'
     # Share mountpoint should be under /shares
 
 
@@ -532,7 +532,7 @@ def test_comprehensive_workflow(initial_state):
     for username, _ in users:
         assert username in final_state['users']
         assert get_zfs_property(
-            f'primary_testpool/homes/{username}', 'quota') == '10G'
+            f'primary_testpool/homes/sztest_{username}', 'quota') == '10G'
 
     # Verify all groups exist
     for dept in departments:

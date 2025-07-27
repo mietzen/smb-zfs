@@ -15,10 +15,10 @@ def test_create_user_basic(initial_state):
         "create user sztest_testuser1 --password 'SecretPassword!' --json")
     final_state = run_smb_zfs_command("get-state")
 
-    assert 'testuser1' in final_state['users']
-    assert get_system_user_details('testuser1') is not None
+    assert 'sztest_testuser1' in final_state['users']
+    assert get_system_user_details('sztest_testuser1') is not None
     assert get_zfs_property(
-        'primary_testpool/homes/testuser1', 'mountpoint') == '/primary_testpool/homes/testuser1'
+        'primary_testpool/homes/sztest_testuser1', 'mountpoint') == '/primary_testpool/homes/sztest_testuser1'
 
 
 def test_create_user_no_home(initial_state):
@@ -27,11 +27,11 @@ def test_create_user_no_home(initial_state):
         "create user sztest_nohomeuser --password 'SecretPassword!' --no-home --json")
     final_state = run_smb_zfs_command("get-state")
 
-    assert 'nohomeuser' in final_state['users']
-    user_details = get_system_user_details('nohomeuser')
+    assert 'sztest_nohomeuser' in final_state['users']
+    user_details = get_system_user_details('sztest_nohomeuser')
     assert user_details is not None
     assert get_zfs_property(
-        'primary_testpool/homes/nohomeuser', 'mountpoint') is None
+        'primary_testpool/homes/sztest_nohomeuser', 'mountpoint') is None
 
 
 def test_create_user_with_shell(initial_state):
@@ -65,14 +65,14 @@ def test_delete_user_with_data(initial_state):
     run_smb_zfs_command(
         "create user sztest_datadelete --password 'SecretPassword!' --json")
     assert get_zfs_property(
-        'primary_testpool/homes/datadelete', 'type') == 'filesystem'
+        'primary_testpool/homes/sztest_datadelete', 'type') == 'filesystem'
 
     run_smb_zfs_command("delete user sztest_datadelete --delete-data --yes --json")
     final_state = run_smb_zfs_command("get-state")
 
-    assert 'datadelete' not in final_state['users']
+    assert 'sztest_datadelete' not in final_state['users']
     assert get_zfs_property(
-        'primary_testpool/homes/datadelete', 'type') is None
+        'primary_testpool/homes/sztest_datadelete', 'type') is None
 
 
 # --- Group Creation and Deletion Tests ---
@@ -188,11 +188,11 @@ def test_delete_share_with_data(initial_state):
 def test_modify_group_add_users(basic_users_and_groups):
     """Test adding users to a group."""
     run_smb_zfs_command(
-        "modify group sztest_test_group --add-users sztest_user_a,user_b --json")
+        "modify group sztest_test_group --add-users sztest_user_a,sztest_user_b --json")
 
-    user_a_details = get_system_user_details('user_a')
-    user_b_details = get_system_user_details('user_b')
-    user_c_details = get_system_user_details('user_c')
+    user_a_details = get_system_user_details('sztest_user_a')
+    user_b_details = get_system_user_details('sztest_user_b')
+    user_c_details = get_system_user_details('sztest_user_c')
 
     assert 'test_group' in user_a_details
     assert 'test_group' in user_b_details
@@ -203,15 +203,15 @@ def test_modify_group_remove_users(basic_users_and_groups):
     """Test removing users from a group."""
     # First add them
     run_smb_zfs_command(
-        "modify group sztest_test_group --add-users sztest_user_a,user_b,user_c --json")
-    assert 'test_group' in get_system_user_details('user_b')
+        "modify group sztest_test_group --add-users sztest_user_a,sztest_user_b,sztest_user_c --json")
+    assert 'test_group' in get_system_user_details('sztest_user_b')
 
     # Then remove one
-    run_smb_zfs_command("modify group sztest_test_group --remove-users user_b --json")
+    run_smb_zfs_command("modify group sztest_test_group --remove-users sztest_user_b --json")
 
-    user_a_details = get_system_user_details('user_a')
-    user_b_details = get_system_user_details('user_b')
-    user_c_details = get_system_user_details('user_c')
+    user_a_details = get_system_user_details('sztest_user_a')
+    user_b_details = get_system_user_details('sztest_user_b')
+    user_c_details = get_system_user_details('sztest_user_c')
 
     assert 'test_group' in user_a_details
     assert 'test_group' not in user_b_details
@@ -222,23 +222,23 @@ def test_modify_group_remove_users(basic_users_and_groups):
 def test_modify_share_basic_properties(basic_users_and_groups):
     """Test modifying various properties of a share."""
     run_smb_zfs_command(
-        "create share modshare --dataset shares/modshare --pool primary_testpool --comment 'Original' --valid-users user_a --json")
+        "create share modshare --dataset shares/modshare --pool primary_testpool --comment 'Original' --valid-users sztest_user_a --json")
 
     # Modify the share
     run_smb_zfs_command(
-        "modify share modshare --comment 'Modified' --valid-users user_a,user_b --readonly --quota 25G --json")
+        "modify share modshare --comment 'Modified' --valid-users sztest_user_a,sztest_user_b --readonly --quota 25G --json")
 
     final_state = run_smb_zfs_command("get-state")
     smb_conf = read_smb_conf()
 
     assert final_state['shares']['modshare']['smb_config']['comment'] == 'Modified'
-    assert 'user_b' in final_state['shares']['modshare']['smb_config']['valid_users']
+    assert 'sztest_user_b' in final_state['shares']['modshare']['smb_config']['valid_users']
     assert final_state['shares']['modshare']['smb_config']['read_only'] == True
     assert get_zfs_property(
         'primary_testpool/shares/modshare', 'quota') == '25G'
 
     assert 'comment = Modified' in smb_conf
-    assert 'valid users = user_a,user_b' in smb_conf
+    assert 'valid users = sztest_user_a,sztest_user_b' in smb_conf
     assert 'read only = yes' in smb_conf
 
 
@@ -268,7 +268,7 @@ def test_modify_share_permissions(basic_users_and_groups):
 
     # Modify ownership and permissions
     run_smb_zfs_command(
-        "modify share permshare --owner user_a --group test_group --perms 755 --json")
+        "modify share permshare --owner sztest_user_a --group test_group --perms 755 --json")
 
     final_state = run_smb_zfs_command("get-state")
 
@@ -295,16 +295,16 @@ def test_modify_share_browseable(basic_users_and_groups):
 def test_modify_home_quota_single_user(basic_users_and_groups):
     """Test modifying the quota of a user's home directory."""
     # Check initial quota (should be 'none' by default)
-    assert get_zfs_property('primary_testpool/homes/user_a', 'quota') == 'none'
+    assert get_zfs_property('primary_testpool/homes/sztest_user_a', 'quota') == 'none'
 
     # Modify the quota
     run_smb_zfs_command("modify home sztest_user_a --quota 5G --json")
 
-    assert get_zfs_property('primary_testpool/homes/user_a', 'quota') == '5G'
+    assert get_zfs_property('primary_testpool/homes/sztest_user_a', 'quota') == '5G'
 
     # Set it back to none
     run_smb_zfs_command("modify home sztest_user_a --quota none --json")
-    assert get_zfs_property('primary_testpool/homes/user_a', 'quota') == 'none'
+    assert get_zfs_property('primary_testpool/homes/sztest_user_a', 'quota') == 'none'
 
 
 def test_modify_home_quota_multiple_users(basic_users_and_groups):
@@ -313,7 +313,7 @@ def test_modify_home_quota_multiple_users(basic_users_and_groups):
     run_smb_zfs_command("modify home sztest_user_a --quota 10G --json")
     run_smb_zfs_command("modify home sztest_user_b --quota 15G --json")
 
-    assert get_zfs_property('primary_testpool/homes/user_a', 'quota') == '10G'
-    assert get_zfs_property('primary_testpool/homes/user_b', 'quota') == '15G'
-    # user_c should still have no quota
-    assert get_zfs_property('primary_testpool/homes/user_c', 'quota') == 'none'
+    assert get_zfs_property('primary_testpool/homes/sztest_user_a', 'quota') == '10G'
+    assert get_zfs_property('primary_testpool/homes/sztest_user_b', 'quota') == '15G'
+    # sztest_user_c should still have no quota
+    assert get_zfs_property('primary_testpool/homes/sztest_user_c', 'quota') == 'none'
