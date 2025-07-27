@@ -19,9 +19,9 @@ def test_json_output_format(comprehensive_setup):
         "modify group sztest_comp_group1 --add-users sztest_comp_user1 --json",
         "modify share comp_share1 --comment 'Modified via JSON' --json",
         "modify home sztest_comp_user1 --quota 10G --json",
-        "delete group json_group --json",
+        "delete group sztest_json_group --json",
         "delete share json_share --yes --json",
-        "delete user json_test --yes --json"
+        "delete user sztest_json_test --yes --json"
     ]
 
     for command in commands:
@@ -57,7 +57,7 @@ def test_duplicate_share_creation(comprehensive_setup):
 def test_nonexistent_user_operations(comprehensive_setup):
     """Test operations on nonexistent users."""
     with pytest.raises(subprocess.CalledProcessError):
-        run_smb_zfs_command("delete user nonexistent_user --yes --json")
+        run_smb_zfs_command("delete user sztest_nonexistent_user --yes --json")
 
     with pytest.raises(subprocess.CalledProcessError):
         run_smb_zfs_command("modify home sztest_nonexistent_user --quota 5G --json")
@@ -70,7 +70,7 @@ def test_nonexistent_group_operations(comprehensive_setup):
             "modify group sztest_nonexistent_group --add-users sztest_comp_user1 --json")
 
     with pytest.raises(subprocess.CalledProcessError):
-        run_smb_zfs_command("delete group nonexistent_group --json")
+        run_smb_zfs_command("delete group sztest_nonexistent_group --json")
 
 
 def test_nonexistent_share_operations(comprehensive_setup):
@@ -282,8 +282,8 @@ def test_cleanup_operations(comprehensive_setup):
     assert 'cleanup_share' in state['shares']
 
     # Clean them up
-    run_smb_zfs_command("delete user cleanup_user --delete-data --yes --json")
-    run_smb_zfs_command("delete group cleanup_group --json")
+    run_smb_zfs_command("delete user sztest_cleanup_user --delete-data --yes --json")
+    run_smb_zfs_command("delete group sztest_cleanup_group --json")
     run_smb_zfs_command(
         "delete share cleanup_share --delete-data --yes --json")
 

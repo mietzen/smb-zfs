@@ -308,7 +308,7 @@ def test_delete_user_with_group_membership(initial_state):
     assert 'member_group' in get_system_user_details('member_user')
 
     # Delete user
-    run_smb_zfs_command("delete user member_user --yes --json")
+    run_smb_zfs_command("delete user sztest_member_user --yes --json")
 
     # User should be removed from group automatically
     state = run_smb_zfs_command("get-state")
@@ -324,7 +324,7 @@ def test_delete_group_with_members(initial_state):
         "create group sztest_member_group --users group_member --json")
 
     # Delete group
-    run_smb_zfs_command("delete group member_group --json")
+    run_smb_zfs_command("delete group sztest_member_group --json")
 
     # Group should be gone, user should remain
     state = run_smb_zfs_command("get-state")

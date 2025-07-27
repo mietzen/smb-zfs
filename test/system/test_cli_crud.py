@@ -53,7 +53,7 @@ def test_delete_user_basic(initial_state):
         "create user sztest_todelete --password 'SecretPassword!' --json")
     assert get_system_user_details('todelete') is not None
 
-    run_smb_zfs_command("delete user todelete --yes --json")
+    run_smb_zfs_command("delete user sztest_todelete --yes --json")
     final_state = run_smb_zfs_command("get-state")
 
     assert 'todelete' not in final_state['users']
@@ -67,7 +67,7 @@ def test_delete_user_with_data(initial_state):
     assert get_zfs_property(
         'primary_testpool/homes/datadelete', 'type') == 'filesystem'
 
-    run_smb_zfs_command("delete user datadelete --delete-data --yes --json")
+    run_smb_zfs_command("delete user sztest_datadelete --delete-data --yes --json")
     final_state = run_smb_zfs_command("get-state")
 
     assert 'datadelete' not in final_state['users']
@@ -113,7 +113,7 @@ def test_delete_group_basic(initial_state):
         "create group sztest_groupdel --description 'Delete me' --json")
     assert get_system_group_exists('groupdel')
 
-    run_smb_zfs_command("delete group groupdel --json")
+    run_smb_zfs_command("delete group sztest_groupdel --json")
     final_state = run_smb_zfs_command("get-state")
 
     assert 'groupdel' not in final_state['groups']
