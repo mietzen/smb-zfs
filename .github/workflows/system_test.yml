@@ -56,9 +56,9 @@ jobs:
           docker exec -i debian bash << 'EOF'
           export BUILD_NUMBER=${{ github.run_id }}
           source .venv/bin/activate
-          pytest ./test/system --junit-xml=system-test-results.xml --verbosity="2" -s
+          pytest ./test/system --junit-xml=system-test-results.xml --verbosity="2"
           EOF
-      - name: Surface failing tests
+      - name: '[Host] Summarize test results'
         if: always()
         uses: pmeier/pytest-results-action@main
         with:

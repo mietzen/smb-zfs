@@ -81,8 +81,17 @@ def test_modify_setup_change_primary_pool(initial_state):
     run_smb_zfs_command(
         "create user migrateuser --password 'TestPassword!' --json")
 
-    run_smb_zfs_command('list pools')
-    run_smb_zfs_command('list shares')
+    datasets = subprocess.run(
+        f"zfs list",
+        shell=True,
+        check=True,
+        capture_output=True)
+
+    pools = subprocess.run(
+        f"zpool list",
+        shell=True,
+        check=True,
+        capture_output=True)
 
     # Change primary pool with data migration
     run_smb_zfs_command(
