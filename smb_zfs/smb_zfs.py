@@ -501,8 +501,9 @@ class SmbZfsManager:
             if 'name' in kwargs and kwargs['name'] is not None:
                 dataset_path = '/'.join(
                     dataset_path.split('/')[:-1])
-                new_path = f'{dataset_path}/{kwargs['name'].lower()}'
-                self._zfs.rename_dataset(share_info['dataset']['name'], new_path)
+                new_path = f"{dataset_path}/{kwargs['name'].lower()}"
+                self._zfs.rename_dataset(
+                    share_info['dataset']['name'], new_path)
                 share_info['dataset']['name'] = new_path
 
             if 'quota' in kwargs and kwargs['quota'] is not None:
@@ -588,7 +589,8 @@ class SmbZfsManager:
                 old_primary_pool = self._state.get('primary_pool')
                 if new_primary_pool != old_primary_pool:
                     if new_primary_pool not in self._zfs.list_pools():
-                        raise StateItemNotFoundError("ZFS pool", new_primary_pool)
+                        raise StateItemNotFoundError(
+                            "ZFS pool", new_primary_pool)
 
                     print("Moving data from old primary pool to new primary pool...")
                     self._zfs.move_dataset(
@@ -770,7 +772,7 @@ class SmbZfsManager:
                 except OSError as e:
                     print(
                         f"Warning: could not remove file {f}: {e}", file=sys.stderr)
-        
+
         # Manually clear the state since the file is being deleted
         self._state._initialize_state_file()
 
