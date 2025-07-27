@@ -113,12 +113,12 @@ def test_quota_format_variations(initial_state):
     quota_formats = ['1G', '512M', '2T', '500G']
 
     for i, quota in enumerate(quota_formats):
-        run_smb_zfs_command(f"modify home quota_user --quota {quota} --json")
+        run_smb_zfs_command(f"modify home sztest_quota_user --quota {quota} --json")
         assert get_zfs_property(
             'primary_testpool/homes/quota_user', 'quota') == quota
 
     # Test removing quota
-    run_smb_zfs_command("modify home quota_user --quota none --json")
+    run_smb_zfs_command("modify home sztest_quota_user --quota none --json")
     assert get_zfs_property(
         'primary_testpool/homes/quota_user', 'quota') == 'none'
 
@@ -147,7 +147,7 @@ def test_group_membership_complex_operations(initial_state):
 
     # Add multiple users at once
     run_smb_zfs_command(
-        "modify group complex_group --add-users member1,member2,member3 --json")
+        "modify group sztest_complex_group --add-users sztest_member1,member2,member3 --json")
 
     # Verify all are members
     for user in ['member1', 'member2', 'member3']:
@@ -155,7 +155,7 @@ def test_group_membership_complex_operations(initial_state):
 
     # Remove some users
     run_smb_zfs_command(
-        "modify group complex_group --remove-users member1,member3 --json")
+        "modify group sztest_complex_group --remove-users member1,member3 --json")
 
     # Verify membership changes
     assert 'complex_group' not in get_system_user_details('member1')
@@ -204,7 +204,7 @@ def test_invalid_user_references(initial_state):
     run_smb_zfs_command("create group sztest_test_group --json")
     with pytest.raises(subprocess.CalledProcessError):
         run_smb_zfs_command(
-            "modify group test_group --add-users nonexistent_user --json")
+            "modify group sztest_test_group --add-users sztest_nonexistent_user --json")
 
     # Try to create share with invalid valid-users
     with pytest.raises(subprocess.CalledProcessError):
@@ -238,10 +238,10 @@ def test_multiple_operations_sequence(initial_state):
     operations = [
         "create user sztest_workflow_user --password 'WorkflowPass!' --json",
         "create group sztest_workflow_group --description 'Workflow group' --json",
-        "modify group workflow_group --add-users workflow_user --json",
+        "modify group sztest_workflow_group --add-users sztest_workflow_user --json",
         "create share workflow_share --dataset shares/workflow_share --valid-users @workflow_group --json",
         "modify share workflow_share --comment 'Modified workflow share' --quota 15G --json",
-        "modify home workflow_user --quota 5G --json"
+        "modify home sztest_workflow_user --quota 5G --json"
     ]
 
     # Execute operations in sequence
@@ -401,10 +401,10 @@ def test_invalid_parameter_combinations(initial_state):
     # Try to create user without password (in non-interactive mode)
     # This might need special handling depending on implementation
 
-    # Try to modify group without any modification flags
+    # Try to modify group sztest_without any modification flags
     with pytest.raises(subprocess.CalledProcessError):
         # This should fail because no modification is specified
-        result = subprocess.run("smb-zfs modify group comp_group1 --json",
+        result = subprocess.run("smb-zfs modify group sztest_comp_group1 --json",
                                 shell=True, capture_output=True, text=True)
         # Command should exit with error code or produce error message
 
@@ -510,7 +510,7 @@ def test_comprehensive_workflow(initial_state):
         run_smb_zfs_command(
             f"create user sztest_{username} --password '{username.capitalize()}Pass!' --shell --json")
         run_smb_zfs_command(
-            f"modify group {dept} --add-users {username} --json")
+            f"modify group sztest_{dept} --add-users sztest_{username} --json")
 
     # 3. Create departmental shares
     for dept in departments:
@@ -523,7 +523,7 @@ def test_comprehensive_workflow(initial_state):
 
     # 5. Set individual quotas
     for username, _ in users:
-        run_smb_zfs_command(f"modify home {username} --quota 10G --json")
+        run_smb_zfs_command(f"modify home sztest_{username} --quota 10G --json")
 
     # 6. Verify final state
     final_state = run_smb_zfs_command("get-state")

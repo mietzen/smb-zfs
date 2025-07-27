@@ -173,38 +173,19 @@ def cleanup_test_users_and_groups(prefix):
     # Delete users starting with prefix
     for user in pwd.getpwall():
         if user.pw_name.startswith(prefix):
-            try:
-                subprocess.run(["userdel", "-r", user.pw_name], check=True)
-                print(f"Deleted user: {user.pw_name}")
-            except subprocess.CalledProcessError as e:
-                print(f"Failed to delete user {user.pw_name}: {e}")
+            subprocess.run(["userdel", "-r", user.pw_name], check=True)
+
     # Delete groups starting with prefix
     for group in grp.getgrall():
         if group.gr_name.startswith(prefix):
-            try:
-                subprocess.run(["groupdel", group.gr_name], check=True)
-                print(f"Deleted group: {group.gr_name}")
-            except subprocess.CalledProcessError as e:
-                print(f"Failed to delete group {group.gr_name}: {e}")
+            subprocess.run(["groupdel", group.gr_name], check=True)
 
 
 def cleanup_test_datasets(pools):
     for pool in pools:
-        try:
-            for dataset in reversed(get_zfs_dataset(pool)):
-                try:
-                    print(f"Teardown: Destroying ZFS dataset '{dataset}'")
-                    # Use -r to recursively destroy snapshots and children
-                    subprocess.run(
-                        ["zfs", "destroy", "-r", dataset], check=True)
-                except subprocess.CalledProcessError as e_destroy:
-                    print(
-                        f"Warning: Failed to destroy dataset {dataset}: {e_destroy}")
-
-        except subprocess.CalledProcessError as e_list:
-            # This might happen if a pool doesn't exist.
-            print(
-                f"Warning: Failed to list datasets for pool {pool}: {e_list}")
+        # Use -r to recursively destroy all datasets
+        subprocess.run(
+            ["zfs", "destroy", "-r", pool], check=True)
 
 
 @pytest.fixture
@@ -239,10 +220,10 @@ def comprehensive_setup():
     run_smb_zfs_command(
         "create group sztest_comp_group1 --description 'Comprehensive group 1' --json")
     run_smb_zfs_command(
-        "create group sztest_comp_group2 --description 'Comprehensive group 2' --users comp_user1,comp_user2 --json")
+        "create group sztest_comp_group2 --description 'Comprehensive group 2' --users sztest_comp_user1,sztest_comp_user2 --json")
 
     # Create shares
     run_smb_zfs_command(
         "create share comp_share1 --dataset shares/comp_share1 --comment 'Comprehensive share 1' --json")
     run_smb_zfs_command(
-        "create share comp_share2 --dataset shares/comp_share2 --pool secondary_testpool --valid-users comp_user1,@comp_group1 --readonly --quota 50G --json")
+        "create share comp_share2 --dataset shares/comp_share2 --pool secondary_testpool --valid-users sztest_comp_user1,@sztest_comp_group1 --readonly --quota 50G --json")

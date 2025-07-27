@@ -16,9 +16,9 @@ def test_json_output_format(comprehensive_setup):
         "create user sztest_json_test --password 'JsonTest!' --json",
         "create group sztest_json_group --json",
         "create share json_share --dataset shares/json_share --json",
-        "modify group comp_group1 --add-users comp_user1 --json",
+        "modify group sztest_comp_group1 --add-users sztest_comp_user1 --json",
         "modify share comp_share1 --comment 'Modified via JSON' --json",
-        "modify home comp_user1 --quota 10G --json",
+        "modify home sztest_comp_user1 --quota 10G --json",
         "delete group json_group --json",
         "delete share json_share --yes --json",
         "delete user json_test --yes --json"
@@ -60,14 +60,14 @@ def test_nonexistent_user_operations(comprehensive_setup):
         run_smb_zfs_command("delete user nonexistent_user --yes --json")
 
     with pytest.raises(subprocess.CalledProcessError):
-        run_smb_zfs_command("modify home nonexistent_user --quota 5G --json")
+        run_smb_zfs_command("modify home sztest_nonexistent_user --quota 5G --json")
 
 
 def test_nonexistent_group_operations(comprehensive_setup):
     """Test operations on nonexistent groups."""
     with pytest.raises(subprocess.CalledProcessError):
         run_smb_zfs_command(
-            "modify group nonexistent_group --add-users comp_user1 --json")
+            "modify group sztest_nonexistent_group --add-users sztest_comp_user1 --json")
 
     with pytest.raises(subprocess.CalledProcessError):
         run_smb_zfs_command("delete group nonexistent_group --json")
@@ -88,46 +88,46 @@ def test_user_with_multiple_groups(comprehensive_setup):
     """Test user membership in multiple groups."""
     # Add user to multiple groups
     run_smb_zfs_command(
-        "modify group comp_group1 --add-users comp_user3 --json")
+        "modify group sztest_comp_group1 --add-users sztest_comp_user3 --json")
     run_smb_zfs_command(
-        "modify group comp_group2 --add-users comp_user3 --json")
+        "modify group sztest_comp_group2 --add-users sztest_comp_user3 --json")
 
-    user_details = get_system_user_details('comp_user3')
-    assert 'comp_group1' in user_details
-    assert 'comp_group2' in user_details
+    user_details = get_system_user_details('sztest_comp_user3')
+    assert 'sztest_comp_group1' in user_details
+    assert 'sztest_comp_group2' in user_details
 
 
 def test_share_with_complex_permissions(comprehensive_setup):
     """Test creating and modifying shares with complex permission sets."""
     # Create share with mixed user and group permissions
     run_smb_zfs_command(
-        "create share complex_share --dataset shares/complex_share --valid-users comp_user1,@comp_group1,comp_user3 --owner comp_user1 --group comp_group1 --perms 770 --json")
+        "create share complex_share --dataset shares/complex_share --valid-users sztest_comp_user1,@sztest_comp_group1,sztest_comp_user3 --owner sztest_comp_user1 --group sztest_comp_group1 --perms 770 --json")
 
     state = run_smb_zfs_command("get-state")
     smb_conf = read_smb_conf()
 
     assert 'complex_share' in state['shares']
-    assert 'comp_user1' in state['shares']['complex_share']['smb_config']['valid_users']
-    assert '@comp_group1' in state['shares']['complex_share']['smb_config']['valid_users']
-    assert 'comp_user3' in state['shares']['complex_share']['smb_config']['valid_users']
+    assert 'sztest_comp_user1' in state['shares']['complex_share']['smb_config']['valid_users']
+    assert '@sztest_comp_group1' in state['shares']['complex_share']['smb_config']['valid_users']
+    assert 'sztest_comp_user3' in state['shares']['complex_share']['smb_config']['valid_users']
 
 
 def test_quota_operations(comprehensive_setup):
     """Test various quota operations."""
     # Set quota
-    run_smb_zfs_command("modify home comp_user1 --quota 15G --json")
+    run_smb_zfs_command("modify home sztest_comp_user1 --quota 15G --json")
     assert get_zfs_property(
-        'primary_testpool/homes/comp_user1', 'quota') == '15G'
+        'primary_testpool/homes/sztest_comp_user1', 'quota') == '15G'
 
     # Change quota
-    run_smb_zfs_command("modify home comp_user1 --quota 25G --json")
+    run_smb_zfs_command("modify home sztest_comp_user1 --quota 25G --json")
     assert get_zfs_property(
-        'primary_testpool/homes/comp_user1', 'quota') == '25G'
+        'primary_testpool/homes/sztest_comp_user1', 'quota') == '25G'
 
     # Remove quota
-    run_smb_zfs_command("modify home comp_user1 --quota none --json")
+    run_smb_zfs_command("modify home sztest_comp_user1 --quota none --json")
     assert get_zfs_property(
-        'primary_testpool/homes/comp_user1', 'quota') == 'none'
+        'primary_testpool/homes/sztest_comp_user1', 'quota') == 'none'
 
 
 def test_share_quota_operations(comprehensive_setup):
@@ -152,7 +152,7 @@ def test_modify_share_all_options(comprehensive_setup):
 
     # Modify all possible options
     run_smb_zfs_command(
-        "modify share modify_all --comment 'Fully modified share' --valid-users comp_user1,comp_user2 --owner comp_user1 --group comp_group1 --perms 755 --quota 30G --readonly --no-browse --json")
+        "modify share modify_all --comment 'Fully modified share' --valid-users sztest_comp_user1,sztest_comp_user2 --owner sztest_comp_user1 --group sztest_comp_group1 --perms 755 --quota 30G --readonly --no-browse --json")
 
     state = run_smb_zfs_command("get-state")
     smb_conf = read_smb_conf()
@@ -161,8 +161,8 @@ def test_modify_share_all_options(comprehensive_setup):
     assert share_config['smb_config']['comment'] == 'Fully modified share'
     assert share_config['smb_config']['read_only'] == True
     assert share_config['smb_config']['browseable'] == False
-    assert 'comp_user1' in share_config['smb_config']['valid_users']
-    assert 'comp_user2' in share_config['smb_config']['valid_users']
+    assert 'sztest_comp_user1' in share_config['smb_config']['valid_users']
+    assert 'sztest_comp_user2' in share_config['smb_config']['valid_users']
 
     assert get_zfs_property(
         'primary_testpool/shares/modify_all', 'quota') == '30G'
@@ -188,14 +188,14 @@ def test_list_command_outputs(comprehensive_setup):
     """Test that list commands produce expected output format."""
     # Test list users
     users_output = run_smb_zfs_command("list users")
-    assert 'comp_user1' in users_output
-    assert 'comp_user2' in users_output
-    assert 'comp_user3' in users_output
+    assert 'sztest_comp_user1' in users_output
+    assert 'sztest_comp_user2' in users_output
+    assert 'sztest_comp_user3' in users_output
 
     # Test list groups
     groups_output = run_smb_zfs_command("list groups")
-    assert 'comp_group1' in groups_output
-    assert 'comp_group2' in groups_output
+    assert 'sztest_comp_group1' in groups_output
+    assert 'sztest_comp_group2' in groups_output
 
     # Test list shares
     shares_output = run_smb_zfs_command("list shares")
@@ -252,7 +252,7 @@ def test_state_consistency_after_operations(comprehensive_setup):
     run_smb_zfs_command(
         "create user sztest_state_test --password 'StateTest!' --json")
     run_smb_zfs_command(
-        "modify group comp_group1 --add-users state_test --json")
+        "modify group sztest_comp_group1 --add-users sztest_state_test --json")
     run_smb_zfs_command(
         "create share state_share --dataset shares/state_share --valid-users state_test --json")
 

@@ -188,7 +188,7 @@ def test_delete_share_with_data(initial_state):
 def test_modify_group_add_users(basic_users_and_groups):
     """Test adding users to a group."""
     run_smb_zfs_command(
-        "modify group test_group --add-users user_a,user_b --json")
+        "modify group sztest_test_group --add-users sztest_user_a,user_b --json")
 
     user_a_details = get_system_user_details('user_a')
     user_b_details = get_system_user_details('user_b')
@@ -203,11 +203,11 @@ def test_modify_group_remove_users(basic_users_and_groups):
     """Test removing users from a group."""
     # First add them
     run_smb_zfs_command(
-        "modify group test_group --add-users user_a,user_b,user_c --json")
+        "modify group sztest_test_group --add-users sztest_user_a,user_b,user_c --json")
     assert 'test_group' in get_system_user_details('user_b')
 
     # Then remove one
-    run_smb_zfs_command("modify group test_group --remove-users user_b --json")
+    run_smb_zfs_command("modify group sztest_test_group --remove-users user_b --json")
 
     user_a_details = get_system_user_details('user_a')
     user_b_details = get_system_user_details('user_b')
@@ -298,20 +298,20 @@ def test_modify_home_quota_single_user(basic_users_and_groups):
     assert get_zfs_property('primary_testpool/homes/user_a', 'quota') == 'none'
 
     # Modify the quota
-    run_smb_zfs_command("modify home user_a --quota 5G --json")
+    run_smb_zfs_command("modify home sztest_user_a --quota 5G --json")
 
     assert get_zfs_property('primary_testpool/homes/user_a', 'quota') == '5G'
 
     # Set it back to none
-    run_smb_zfs_command("modify home user_a --quota none --json")
+    run_smb_zfs_command("modify home sztest_user_a --quota none --json")
     assert get_zfs_property('primary_testpool/homes/user_a', 'quota') == 'none'
 
 
 def test_modify_home_quota_multiple_users(basic_users_and_groups):
     """Test modifying quotas for multiple users."""
     # Set quotas for multiple users
-    run_smb_zfs_command("modify home user_a --quota 10G --json")
-    run_smb_zfs_command("modify home user_b --quota 15G --json")
+    run_smb_zfs_command("modify home sztest_user_a --quota 10G --json")
+    run_smb_zfs_command("modify home sztest_user_b --quota 15G --json")
 
     assert get_zfs_property('primary_testpool/homes/user_a', 'quota') == '10G'
     assert get_zfs_property('primary_testpool/homes/user_b', 'quota') == '15G'
