@@ -225,8 +225,8 @@ def test_special_characters_in_names(comprehensive_setup):
         "create group sztest_test_group_456 --description 'Test group with numbers' --json")
 
     state = run_smb_zfs_command("get-state")
-    assert 'test_user_123' in state['users']
-    assert 'test_group_456' in state['groups']
+    assert 'sztest_test_user_123' in state['users']
+    assert 'sztest_test_group_456' in state['groups']
 
 
 def test_long_descriptions_and_comments(comprehensive_setup):
@@ -239,7 +239,7 @@ def test_long_descriptions_and_comments(comprehensive_setup):
         f"create share long_comment_share --dataset shares/long_comment_share --comment '{long_description}' --json")
 
     state = run_smb_zfs_command("get-state")
-    assert state['groups']['long_desc_group']['description'] == long_description
+    assert state['groups']['sztest_long_desc_group']['description'] == long_description
     assert state['shares']['long_comment_share']['smb_config']['comment'] == long_description
 
 
@@ -254,12 +254,12 @@ def test_state_consistency_after_operations(comprehensive_setup):
     run_smb_zfs_command(
         "modify group sztest_comp_group1 --add-users sztest_state_test --json")
     run_smb_zfs_command(
-        "create share state_share --dataset shares/state_share --valid-users state_test --json")
+        "create share state_share --dataset shares/state_share --valid-users sztest_state_test --json")
 
     final_state = run_smb_zfs_command("get-state")
 
     # Verify state consistency
-    assert 'state_test' in final_state['users']
+    assert 'sztest_state_test' in final_state['users']
     assert 'state_share' in final_state['shares']
     assert len(final_state['users']) == len(initial_state['users']) + 1
     assert len(final_state['shares']) == len(
@@ -277,8 +277,8 @@ def test_cleanup_operations(comprehensive_setup):
 
     # Verify they exist
     state = run_smb_zfs_command("get-state")
-    assert 'cleanup_user' in state['users']
-    assert 'cleanup_group' in state['groups']
+    assert 'sztest_cleanup_user' in state['users']
+    assert 'sztest_cleanup_group' in state['groups']
     assert 'cleanup_share' in state['shares']
 
     # Clean them up
@@ -289,6 +289,6 @@ def test_cleanup_operations(comprehensive_setup):
 
     # Verify they're gone
     final_state = run_smb_zfs_command("get-state")
-    assert 'cleanup_user' not in final_state['users']
-    assert 'cleanup_group' not in final_state['groups']
+    assert 'sztest_cleanup_user' not in final_state['users']
+    assert 'sztest_cleanup_group' not in final_state['groups']
     assert 'cleanup_share' not in final_state['shares']

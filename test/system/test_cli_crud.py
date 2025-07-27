@@ -40,8 +40,8 @@ def test_create_user_with_shell(initial_state):
         "create user sztest_shelluser --password 'SecretPassword!' --shell --json")
     final_state = run_smb_zfs_command("get-state")
 
-    assert 'shelluser' in final_state['users']
-    user_shell = get_system_user_shell('shelluser')
+    assert 'sztest_shelluser' in final_state['users']
+    user_shell = get_system_user_shell('sztest_shelluser')
     assert user_shell is not None
     # The shell should be /bin/bash when --shell is used
     assert '/bin/bash' in user_shell
@@ -82,8 +82,8 @@ def test_create_group_basic(initial_state):
         "create group sztest_testgroup1 --description 'A test group' --json")
     final_state = run_smb_zfs_command("get-state")
 
-    assert 'testgroup1' in final_state['groups']
-    assert get_system_group_exists('testgroup1')
+    assert 'sztest_testgroup1' in final_state['groups']
+    assert get_system_group_exists('sztest_testgroup1')
 
 
 def test_create_group_with_users(initial_state):
@@ -98,26 +98,26 @@ def test_create_group_with_users(initial_state):
         "create group sztest_testgroup2 --description 'Group with users' --users sztest_groupuser1,sztest_groupuser2 --json")
     final_state = run_smb_zfs_command("get-state")
 
-    assert 'testgroup2' in final_state['groups']
-    assert get_system_group_exists('testgroup2')
+    assert 'sztest_testgroup2' in final_state['groups']
+    assert get_system_group_exists('sztest_testgroup2')
     # Check that users are in the group
     user1_details = get_system_user_details('sztest_groupuser1')
     user2_details = get_system_user_details('sztest_groupuser2')
-    assert 'testgroup2' in user1_details
-    assert 'testgroup2' in user2_details
+    assert 'sztest_testgroup2' in user1_details
+    assert 'sztest_testgroup2' in user2_details
 
 
 def test_delete_group_basic(initial_state):
     """Test deleting a group."""
     run_smb_zfs_command(
         "create group sztest_groupdel --description 'Delete me' --json")
-    assert get_system_group_exists('groupdel')
+    assert get_system_group_exists('sztest_groupdel')
 
     run_smb_zfs_command("delete group sztest_groupdel --json")
     final_state = run_smb_zfs_command("get-state")
 
-    assert 'groupdel' not in final_state['groups']
-    assert not get_system_group_exists('groupdel')
+    assert 'sztest_groupdel' not in final_state['groups']
+    assert not get_system_group_exists('sztest_groupdel')
 
 
 # --- Share Creation and Deletion Tests ---
@@ -141,13 +141,13 @@ def test_create_share_with_permissions(initial_state):
     run_smb_zfs_command(
         "create user sztest_shareuser --password 'SecretPassword!' --json")
     run_smb_zfs_command(
-        "create share restrictedshare --dataset shares/restrictedshare --pool secondary_testpool --valid-users shareuser --readonly --no-browse --json")
+        "create share restrictedshare --dataset shares/restrictedshare --pool secondary_testpool --valid-users sztest_shareuser --readonly --no-browse --json")
     final_state = run_smb_zfs_command("get-state")
     smb_conf = read_smb_conf()
 
     assert 'restrictedshare' in final_state['shares']
     assert '[restrictedshare]' in smb_conf
-    assert 'valid users = shareuser' in smb_conf
+    assert 'valid users = sztest_shareuser' in smb_conf
     assert 'read only = yes' in smb_conf
     assert 'browseable = no' in smb_conf
 

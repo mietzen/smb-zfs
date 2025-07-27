@@ -48,11 +48,11 @@ def test_user_with_groups_flag(initial_state):
 
     # create user sztest_with initial groups
     run_smb_zfs_command(
-        "create user sztest_grouped_user --password 'GroupedPass!' --groups initial_group1,initial_group2 --json")
+        "create user sztest_grouped_user --password 'GroupedPass!' --groups sztest_initial_group1,sztest_initial_group2 --json")
 
     user_details = get_system_user_details('sztest_grouped_user')
-    assert 'initial_group1' in user_details
-    assert 'initial_group2' in user_details
+    assert 'sztest_initial_group1' in user_details
+    assert 'sztest_initial_group2' in user_details
 
 
 def test_user_shell_variations(initial_state):
@@ -60,7 +60,7 @@ def test_user_shell_variations(initial_state):
     # User with shell enabled
     run_smb_zfs_command(
         "create user sztest_shell_user --password 'ShellPass!' --shell --json")
-    user_shell = get_system_user_shell('shell_user')
+    user_shell = get_system_user_shell('sztest_shell_user')
     assert '/bin/bash' in user_shell
 
     # User without shell (default)
@@ -82,7 +82,7 @@ def test_share_permission_combinations(initial_state):
 
     # Share with user and group permissions
     run_smb_zfs_command(
-        "create share mixed_perms --dataset shares/mixed_perms --valid-users perm_user1,@perm_group --json")
+        "create share mixed_perms --dataset shares/mixed_perms --valid-users sztest_perm_user1,@sztest_perm_group --json")
 
     # Read-only share
     run_smb_zfs_command(
@@ -94,7 +94,7 @@ def test_share_permission_combinations(initial_state):
 
     # Share with custom ownership
     run_smb_zfs_command(
-        "create share custom_own --dataset shares/custom_own --owner perm_user1 --group perm_group --perms 750 --json")
+        "create share custom_own --dataset shares/custom_own --owner sztest_perm_user1 --group sztest_perm_group --perms 750 --json")
 
     state = run_smb_zfs_command("get-state")
 
@@ -252,7 +252,7 @@ def test_multiple_operations_sequence(initial_state):
     final_state = run_smb_zfs_command("get-state")
 
     assert 'sztest_workflow_user' in final_state['users']
-    assert 'workflow_group' in final_state['groups']
+    assert 'sztest_workflow_group' in final_state['groups']
     assert 'workflow_share' in final_state['shares']
     assert final_state['shares']['workflow_share']['smb_config']['comment'] == 'Modified workflow share'
     assert get_zfs_property(
@@ -321,7 +321,7 @@ def test_delete_group_with_members(initial_state):
     run_smb_zfs_command(
         "create user sztest_group_member --password 'GroupMemberPass!' --json")
     run_smb_zfs_command(
-        "create group sztest_member_group --users group_member --json")
+        "create group sztest_member_group --users sztest_group_member --json")
 
     # Delete group
     run_smb_zfs_command("delete group sztest_member_group --json")
@@ -500,10 +500,10 @@ def test_comprehensive_workflow(initial_state):
 
     # 2. Create users for each department
     users = [
-        ('alice', 'engineering'),
-        ('bob', 'engineering'),
-        ('carol', 'marketing'),
-        ('dave', 'finance')
+        ('sztest_alice', 'engineering'),
+        ('sztest_bob', 'engineering'),
+        ('sztest_carol', 'marketing'),
+        ('sztest_dave', 'finance')
     ]
 
     for username, dept in users:
@@ -519,7 +519,7 @@ def test_comprehensive_workflow(initial_state):
 
     # 4. Create a common share
     run_smb_zfs_command(
-        "create share common --dataset shares/common --valid-users alice,bob,carol,dave --comment 'Common shared area' --json")
+        f"create share common --dataset shares/common --valid-users {','.join([x[0] for x in users])} --comment 'Common shared area' --json")
 
     # 5. Set individual quotas
     for username, _ in users:

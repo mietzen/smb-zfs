@@ -81,22 +81,6 @@ def test_modify_setup_change_primary_pool(initial_state):
     run_smb_zfs_command(
         "create user sztest_migrateuser --password 'TestPassword!' --json")
 
-    datasets = subprocess.run(
-        f"zfs list",
-        shell=True,
-        check=True,
-        capture_output=True)
-
-    print(datasets)
-    # Fail here
-    assert datasets == 1
-
-    pools = subprocess.run(
-        f"zpool list",
-        shell=True,
-        check=True,
-        capture_output=True)
-
     # Change primary pool with data migration
     run_smb_zfs_command(
         "modify setup --primary-pool secondary_testpool --json")
@@ -145,13 +129,13 @@ def test_remove_command_complete(initial_state):
     # Create a user to ensure there's something to delete
     run_smb_zfs_command(
         "create user sztest_testuser --password TestPassword123 --json")
-    assert get_system_user_exists('testuser')
+    assert get_system_user_exists('sztest_testuser')
 
     # Run remove
     run_smb_zfs_command("remove --delete-users --delete-data --yes --json")
 
     # Verify cleanup
-    assert not get_system_user_exists('testuser')
+    assert not get_system_user_exists('sztest_testuser')
     assert not get_zfs_dataset_exists('primary_testpool/homes')
     assert not get_zfs_dataset_exists('primary_testpool/shares')
     with pytest.raises(subprocess.CalledProcessError):
