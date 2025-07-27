@@ -140,6 +140,7 @@ def manage_smb_zfs_environment():
     """Fixture to set up and tear down smb-zfs for each test."""
     # Setup: Ensure a clean state before setting up
     try:
+        run_smb_zfs_command("remove --delete-users --delete-data --yes")
         run_smb_zfs_command("setup --primary-pool primary_testpool --secondary-pools secondary_testpool tertiary_testpool --server-name TESTSERVER --workgroup TESTGROUP")
         yield
         run_smb_zfs_command("remove --delete-users --delete-data --yes")
