@@ -171,6 +171,7 @@ def cmd_modify_share(manager, args):
         'group': args.group,
         'quota': args.quota,
         'pool': args.pool,
+        'name': args.name
     }
 
     if args.no_browse is not None:
@@ -594,6 +595,8 @@ def main():
         "share", help="Modify a share's properties.")
     p_modify_share.add_argument(
         "share", help="The name of the share to modify.")
+    p_modify_share.add_argument(
+        "--name", help="Rename the share and dataset.")
     p_modify_share.add_argument(
         "--pool", help="Move the share's dataset to a new ZFS pool.")
     p_modify_share.add_argument(

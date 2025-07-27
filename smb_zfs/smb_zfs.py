@@ -467,14 +467,13 @@ class SmbZfsManager:
 
     @requires_initialization
     def modify_share(self, share_name, **kwargs):
+        original_state = self._state.get_data_copy()
         share_info = self._state.get_item("shares", share_name)
         if not share_info:
             raise StateItemNotFoundError("share", share_name)
 
         samba_config_changed = False
-        original_share_info = self._state.get_data_copy()['shares'][share_name]
-        new_dataset_name = None
-
+        new_dataset_path = None
         try:
             if 'pool' in kwargs and kwargs['pool'] is not None and kwargs['pool'] != share_info['dataset']['pool']:
                 new_pool = kwargs['pool']
@@ -485,21 +484,26 @@ class SmbZfsManager:
                     raise SmbZfsError(
                         f"Target pool '{new_pool}' is not a valid managed pool.")
 
-                old_dataset_name = share_info['dataset']['name']
+                dataset_path = share_info['dataset']['name']
                 dataset_path_in_pool = '/'.join(
-                    old_dataset_name.split('/')[1:])
-                new_dataset_name = f"{new_pool}/{dataset_path_in_pool}"
+                    dataset_path.split('/')[1:])
 
-                if self._zfs.dataset_exists(new_dataset_name):
-                    raise ItemExistsError("dataset", new_dataset_name)
+                self._zfs.move_dataset(dataset_path, new_pool)
 
-                self._zfs.rename_dataset(old_dataset_name, new_dataset_name)
+                new_dataset_path = f"{new_pool}/{dataset_path_in_pool}"
 
                 share_info['dataset']['pool'] = new_pool
-                share_info['dataset']['name'] = new_dataset_name
+                share_info['dataset']['name'] = new_dataset_path
                 share_info['dataset']['mount_point'] = self._zfs.get_mountpoint(
-                    new_dataset_name)
+                    new_dataset_path)
                 samba_config_changed = True
+
+            if 'name' in kwargs and kwargs['name'] is not None:
+                dataset_path = '/'.join(
+                    dataset_path.split('/')[:-1])
+                new_path = f'{dataset_path}/{kwargs['name'].lower()}'
+                self._zfs.rename_dataset(share_info['dataset']['name'], new_path)
+                share_info['dataset']['name'] = new_path
 
             if 'quota' in kwargs and kwargs['quota'] is not None:
                 new_quota = kwargs['quota'] if kwargs['quota'].lower(
@@ -564,11 +568,11 @@ class SmbZfsManager:
                 self._system.test_samba_config()
                 self._system.reload_samba()
 
-        except Exception:
-            self._state.set_item("shares", share_name, original_share_info)
-            if new_dataset_name and self._zfs.dataset_exists(new_dataset_name):
-                self._zfs.rename_dataset(
-                    new_dataset_name, original_share_info['dataset']['name'])
+        except Exception as e:
+            self._state.data = original_state
+            self._state.save()
+            print(
+                f"Error during setup modification: {e}. State restored, but filesystem changes might need manual rollback.", file=sys.stderr)
             raise
 
         return {"msg": f"Share '{share_name}' modified successfully.", "state": self._state.get_data_copy()}
@@ -605,9 +609,9 @@ class SmbZfsManager:
                             old_dataset_name = share_info['dataset']['name']
                             dataset_path_in_pool = '/'.join(
                                 old_dataset_name.split('/')[1:])
+                            self._zfs.move_dataset(
+                                old_dataset_name, new_primary_pool)
                             new_dataset_name = f"{new_primary_pool}/{dataset_path_in_pool}"
-                            self._zfs.rename_dataset(
-                                old_dataset_name, new_dataset_name)
                             share_info['dataset']['pool'] = new_primary_pool
                             share_info['dataset']['name'] = new_dataset_name
                             share_info['dataset']['mount_point'] = self._zfs.get_mountpoint(
