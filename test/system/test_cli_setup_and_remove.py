@@ -138,8 +138,8 @@ def test_remove_command_complete(initial_state):
     assert not get_system_user_exists('sztest_testuser')
     assert not get_zfs_dataset_exists('primary_testpool/homes')
     assert not get_zfs_dataset_exists('primary_testpool/shares')
-    with pytest.raises(subprocess.CalledProcessError):
-        run_smb_zfs_command("get-state")  # Should fail as setup is gone
+    result = run_smb_zfs_command("get-state")
+    assert result == "Error: System not set up. Run 'setup' first."
 
 
 def test_remove_partial_cleanup(initial_state):

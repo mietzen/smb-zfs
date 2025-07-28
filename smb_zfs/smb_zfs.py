@@ -21,6 +21,7 @@ from .errors import (
     InvalidNameError,
     PrerequisiteError,
     SmbZfsError,
+    MissingInput
 )
 
 STATE_FILE = f"/var/lib/{NAME}.state"
@@ -443,6 +444,9 @@ class SmbZfsManager:
         if not group_info:
             raise StateItemNotFoundError("group", groupname)
 
+        if not add_users and not remove_users:
+            raise MissingInput('Found no users to add or remove!')
+ 
         current_members = set(group_info.get("members", []))
         if add_users:
             for user in add_users:

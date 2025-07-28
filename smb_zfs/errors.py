@@ -51,6 +51,14 @@ class PrerequisiteError(SmbZfsError):
         super().__init__(self.message)
 
 
+class MissingInput(SmbZfsError):
+    """Raised when trying to execute zfs commands."""
+
+    def __init__(self, message):
+        self.message = message
+        super().__init__(self.message)
+
+
 class ZfsCmdError(SmbZfsError):
     """Raised when trying to execute zfs commands."""
 

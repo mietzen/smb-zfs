@@ -200,7 +200,6 @@ def cleanup_test_datasets(pools):
 @pytest.fixture
 def initial_state():
     """Fixture to get the state of the system before a test action."""
-    # get-state does not take a --json flag.
     return run_smb_zfs_command("get-state")
 
 

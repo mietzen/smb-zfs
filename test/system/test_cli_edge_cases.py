@@ -193,23 +193,20 @@ def test_get_state_comprehensive(initial_state):
 def test_invalid_pool_operations(initial_state):
     """Test operations with invalid pools."""
     # Try to create share on non-existent pool
-    with pytest.raises(subprocess.CalledProcessError):
-        run_smb_zfs_command(
-            "create share invalid_pool_share --dataset shares/invalid_pool_share --pool nonexistent_pool --json")
+    result = run_smb_zfs_command(
+        "create share invalid_pool_share --dataset shares/invalid_pool_share --pool nonexistent_pool --json")
+    assert result == "Error: Pool 'nonexistent_pool' is not a valid pool. Managed pools are: primary_testpool, secondary_testpool, tertiary_testpool"
 
 
 def test_invalid_user_references(initial_state):
     """Test operations referencing invalid users."""
     # Try to add non-existent user to group
     run_smb_zfs_command("create group sztest_test_group --json")
-    with pytest.raises(subprocess.CalledProcessError):
-        run_smb_zfs_command(
-            "modify group sztest_test_group --add-users sztest_nonexistent_user --json")
+    result = run_smb_zfs_command("modify group sztest_test_group --add-users sztest_nonexistent_user --json")
+    assert result == "Error: User 'sztest_nonexistent_user' not found or not managed by this tool."
 
-    # Try to create share with invalid valid-users
-    with pytest.raises(subprocess.CalledProcessError):
-        run_smb_zfs_command(
-            "create share invalid_user_share --dataset shares/invalid_user_share --valid-users nonexistent_user --json")
+    result = run_smb_zfs_command("create share invalid_user_share --dataset shares/invalid_user_share --valid-users nonexistent_user --json")
+    assert "Error: User 'nonexistent_user' not found or not managed by this tool." in result.split('\n')
 
 
 def test_dataset_path_variations(initial_state):
@@ -349,14 +346,8 @@ def test_delete_share_with_dependencies(initial_state):
 
 
 # --- Complex Remove Scenario Tests ---
-def test_remove_with_complex_setup():
+def test_remove_users_with_complex_setup():
     """Test remove command with complex setup."""
-    # Clean slate
-    try:
-        run_smb_zfs_command("remove --delete-users --delete-data --yes")
-    except subprocess.CalledProcessError:
-        pass
-
     # Create complex setup
     run_smb_zfs_command(
         "setup --primary-pool primary_testpool --secondary-pools secondary_testpool tertiary_testpool --server-name COMPLEXTEST --workgroup COMPLEXGROUP --macos --default-home-quota 25G")
@@ -376,8 +367,7 @@ def test_remove_with_complex_setup():
     run_smb_zfs_command("remove --delete-users --yes --json")
 
     # Verify users gone, data remains
-    with pytest.raises(subprocess.CalledProcessError):
-        get_system_user_details('sztest_complex1')
+    assert None == get_system_user_details('sztest_complex1')
 
     # Datasets should still exist
     assert get_zfs_property(
@@ -385,28 +375,47 @@ def test_remove_with_complex_setup():
     assert get_zfs_property(
         'primary_testpool/shares/complex_share1', 'type') == 'filesystem'
 
+# --- Complex Remove Scenario Tests ---
+def test_remove_data_with_complex_setup():
+    """Test remove command with complex setup."""
+
+    # Create complex setup
+    run_smb_zfs_command(
+        "setup --primary-pool primary_testpool --secondary-pools secondary_testpool tertiary_testpool --server-name COMPLEXTEST --workgroup COMPLEXGROUP --macos --default-home-quota 25G")
+
+    # Add complex data
+    run_smb_zfs_command(
+        "create user sztest_complex1 --password 'sztest_complex1!' --shell --json")
+    run_smb_zfs_command(
+        "create user sztest_complex2 --password 'Complex2!' --no-home --json")
+    run_smb_zfs_command("create group sztest_complex_group --users sztest_complex1 --json")
+    run_smb_zfs_command(
+        "create share complex_share1 --dataset shares/complex_share1 --pool primary_testpool --json")
+    run_smb_zfs_command(
+        "create share complex_share2 --dataset shares/complex_share2 --pool secondary_testpool --valid-users @complex_group --json")
+
     # Complete removal
     run_smb_zfs_command("remove --delete-data --yes --json")
 
+    # Verify users remain
+    assert 'sztest_complex1' in get_system_user_details('sztest_complex1')
+
     # Everything should be gone
     assert get_zfs_property('primary_testpool/homes', 'type') is None
-    assert get_zfs_property('primary_testpool/shares', 'type') is None
+    assert get_zfs_property('primary_testpool/shares/complex_share1', 'type') is None
+    assert get_zfs_property('primary_testpool/shares/complex_share2', 'type') is None
 
 
 # --- Parameter Validation Tests ---
 def test_invalid_parameter_combinations(initial_state):
     """Test commands with invalid parameter combinations."""
-    # These should fail with appropriate errors
-
-    # Try to create user without password (in non-interactive mode)
-    # This might need special handling depending on implementation
-
     # Try to modify group sztest_without any modification flags
-    with pytest.raises(subprocess.CalledProcessError):
-        # This should fail because no modification is specified
-        result = subprocess.run("smb-zfs modify group sztest_comp_group1 --json",
-                                shell=True, capture_output=True, text=True)
-        # Command should exit with error code or produce error message
+    run_smb_zfs_command(
+        "create user sztest_complex1 --password 'sztest_complex1!' --shell --json")
+    run_smb_zfs_command("create group sztest_comp_group1 --users sztest_complex1 --json")
+    result = run_smb_zfs_command(
+        "modify group sztest_comp_group1 --json")
+    assert result == "Error: Found no users to add or remove!"
 
 
 def test_password_security_handling(initial_state):
