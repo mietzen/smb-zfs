@@ -35,52 +35,56 @@ def test_json_output_format(comprehensive_setup):
 # --- Error Handling Tests ---
 def test_duplicate_user_creation(comprehensive_setup):
     """Test creating duplicate users returns appropriate error."""
-    with pytest.raises(subprocess.CalledProcessError):
-        run_smb_zfs_command(
-            "create user sztest_comp_user1 --password 'DuplicatePass!' --json")
+    result = run_smb_zfs_command(
+        "create user sztest_comp_user1 --password 'DuplicatePass!' --json")
+    assert result == "Error: User 'sztest_comp_user1' already exists."
 
 
 def test_duplicate_group_creation(comprehensive_setup):
     """Test creating duplicate groups returns appropriate error."""
-    with pytest.raises(subprocess.CalledProcessError):
-        run_smb_zfs_command(
-            "create group sztest_comp_group1 --description 'Duplicate group' --json")
+    result = run_smb_zfs_command(
+        "create group sztest_comp_group1 --description 'Duplicate group' --json")
+    assert result == "Error: Group 'sztest_comp_group1' already exists."
 
 
 def test_duplicate_share_creation(comprehensive_setup):
     """Test creating duplicate shares returns appropriate error."""
-    with pytest.raises(subprocess.CalledProcessError):
-        run_smb_zfs_command(
-            "create share comp_share1 --dataset shares/comp_share1_dup --json")
+    result = run_smb_zfs_command(
+        "create share comp_share1 --dataset shares/comp_share1_dup --json")
+    assert result == "Error: Share 'comp_share1' already exists."
 
 
 def test_nonexistent_user_operations(comprehensive_setup):
     """Test operations on nonexistent users."""
-    with pytest.raises(subprocess.CalledProcessError):
-        run_smb_zfs_command("delete user sztest_nonexistent_user --yes --json")
-
-    with pytest.raises(subprocess.CalledProcessError):
-        run_smb_zfs_command("modify home sztest_nonexistent_user --quota 5G --json")
+    commands = [
+        "delete user sztest_nonexistent_user --yes --json",
+        "modify home sztest_nonexistent_user --quota 5G --json"
+    ]
+    for cmd in commands:
+        result = run_smb_zfs_command(cmd)
+        assert result == "Error: User 'sztest_nonexistent_user' not found or not managed by this tool."
 
 
 def test_nonexistent_group_operations(comprehensive_setup):
     """Test operations on nonexistent groups."""
-    with pytest.raises(subprocess.CalledProcessError):
-        run_smb_zfs_command(
-            "modify group sztest_nonexistent_group --add-users sztest_comp_user1 --json")
-
-    with pytest.raises(subprocess.CalledProcessError):
-        run_smb_zfs_command("delete group sztest_nonexistent_group --json")
+    commands = [
+        "modify group sztest_nonexistent_group --add-users sztest_comp_user1 --json",
+        "delete group sztest_nonexistent_group --json"
+    ]
+    for cmd in commands:
+        result = run_smb_zfs_command(cmd)
+        assert result == "Error: Group 'sztest_nonexistent_group' not found or not managed by this tool."
 
 
 def test_nonexistent_share_operations(comprehensive_setup):
     """Test operations on nonexistent shares."""
-    with pytest.raises(subprocess.CalledProcessError):
-        run_smb_zfs_command(
-            "modify share nonexistent_share --comment 'New comment' --json")
-
-    with pytest.raises(subprocess.CalledProcessError):
-        run_smb_zfs_command("delete share nonexistent_share --yes --json")
+    commands = [
+        "modify share nonexistent_share --comment 'New comment' --json",
+        "delete share nonexistent_share --yes --json"
+    ]
+    for cmd in commands:
+        result = run_smb_zfs_command(cmd)
+        assert result == "Error: Share 'nonexistent_share' not found or not managed by this tool."
 
 
 # --- Complex Scenario Tests ---
