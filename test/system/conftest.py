@@ -32,14 +32,20 @@ def run_smb_zfs_command(command):
     stdout = stdout_buffer.getvalue()
     stderr = stderr_buffer.getvalue()
     if stderr:
-        return f'{stdout}\n\n{stderr}'
+        return format_text_output(f'{stdout}\n\n{stderr}')
 
     if is_json_output:
         # Handle cases where stdout might be empty on success (e.g., some --json commands)
         if not stdout.strip():
             return {}
         return json.loads(stdout)
-    return stdout
+
+    return format_text_output(stdout)
+
+
+def format_text_output(text: str) -> str:
+    """Format as multiline string and remove leading / trailing whitespaces"""
+    return '\n'.join(line.strip() for line in text.strip().splitlines())
 
 
 def get_system_user_details(username):
