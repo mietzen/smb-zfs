@@ -1,4 +1,3 @@
-from typing import Dict, Any, List, Optional, Union
 from conftest import (
     run_smb_zfs_command,
     get_system_user_exists,
@@ -11,7 +10,7 @@ from smb_zfs.config_generator import MACOS_SETTINGS
 
 
 # --- Initial Setup State Tests ---
-def test_initial_setup_state(initial_state: Dict[str, Any]) -> None:
+def test_initial_setup_state(initial_state) -> None:
     """Verify the state after the initial setup in the fixture."""
     assert initial_state['primary_pool'] == 'primary_testpool'
     assert 'secondary_testpool' in initial_state['secondary_pools']
@@ -62,7 +61,7 @@ def test_setup_with_options() -> None:
 
 
 # --- Setup Modification Tests ---
-def test_modify_setup_remove_secondary_pool(initial_state: Dict[str, Any]) -> None:
+def test_modify_setup_remove_secondary_pool(initial_state) -> None:
     """Test modifying setup to remove a secondary pool."""
     cmd = "modify setup --remove-secondary-pools tertiary_testpool --json"
     result = run_smb_zfs_command(cmd)
@@ -80,7 +79,7 @@ def test_modify_setup_remove_secondary_pool(initial_state: Dict[str, Any]) -> No
     assert get_zfs_dataset_exists('primary_testpool/homes')
 
 
-def test_modify_setup_change_server_settings(initial_state: Dict[str, Any]) -> None:
+def test_modify_setup_change_server_settings(initial_state) -> None:
     """Test changing server name and workgroup."""
     cmd = "modify setup --server-name NEWSERVER --workgroup NEWGROUP --json"
     result = run_smb_zfs_command(cmd)
@@ -101,7 +100,7 @@ def test_modify_setup_change_server_settings(initial_state: Dict[str, Any]) -> N
     assert 'server string = TESTSERVER' not in smb_conf_content
 
 
-def test_modify_setup_change_primary_pool(initial_state: Dict[str, Any]) -> None:
+def test_modify_setup_change_primary_pool(initial_state) -> None:
     """Test changing the primary pool with data migration."""
     # Create a user first to have data to migrate
     cmd1 = "create user sztest_migrateuser --password 'TestPassword!' --json"
@@ -137,7 +136,7 @@ def test_modify_setup_change_primary_pool(initial_state: Dict[str, Any]) -> None
     assert home_path is not None
 
 
-def test_modify_setup_macos_toggle(initial_state: Dict[str, Any]) -> None:
+def test_modify_setup_macos_toggle(initial_state) -> None:
     """Test toggling macOS optimization."""
     # Enable macOS optimization
     cmd1 = "modify setup --macos --json"
@@ -172,7 +171,7 @@ def test_modify_setup_macos_toggle(initial_state: Dict[str, Any]) -> None:
             assert setting.strip() not in smb_conf2
 
 
-def test_modify_setup_default_home_quota(initial_state: Dict[str, Any]) -> None:
+def test_modify_setup_default_home_quota(initial_state) -> None:
     """Test changing default home quota."""
     cmd1 = "modify setup --default-home-quota 50G --json"
     result1 = run_smb_zfs_command(cmd1)
@@ -202,7 +201,7 @@ def test_modify_setup_default_home_quota(initial_state: Dict[str, Any]) -> None:
 
 
 # --- Remove Command Tests ---
-def test_remove_command_complete(initial_state: Dict[str, Any]) -> None:
+def test_remove_command_complete(initial_state) -> None:
     """
     Test the remove command. This is implicitly tested by the teardown fixture,
     but we can have an explicit test too.
@@ -237,7 +236,7 @@ def test_remove_command_complete(initial_state: Dict[str, Any]) -> None:
         result3, "Error: System not set up. Run 'setup' first.", is_error=True)
 
 
-def test_remove_partial_cleanup(initial_state: Dict[str, Any]) -> None:
+def test_remove_partial_cleanup(initial_state) -> None:
     """Test remove command with partial cleanup options."""
     # Create test data
     cmd1 = "create user sztest_removeuser --password 'TestPassword!' --json"
