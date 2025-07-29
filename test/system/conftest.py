@@ -43,6 +43,23 @@ def run_smb_zfs_command(command, user_inputs=None):
     return format_text_output(stdout)
 
 
+def check_smb_zfs_result(result, asserted_msg, json=False, is_error=False):
+    assert asserted_msg
+    if is_error:
+        assert type(result) == str
+        assert asserted_msg in result
+    else:
+        assert 'Error' not in result
+        if json:
+            assert type(result) == dict
+            assert 'msg' in result
+            assert 'state' in result
+            assert asserted_msg in result['msg']
+        else:
+            assert type(result) == str
+            assert asserted_msg in result
+        
+
 def format_text_output(text: str) -> str:
     """Format as multiline string and remove leading / trailing whitespaces"""
     return '\n'.join(line.strip() for line in text.strip().splitlines())

@@ -5,6 +5,33 @@ from datetime import datetime
 
 from .const import SMB_CONF, AVAHI_SMB_SERVICE
 
+MACOS_SETTINGS = """
+    vfs objects = fruit streams_xattr
+    fruit:metadata = stream
+    fruit:model = MacSamba
+    fruit:posix_rename = yes
+    fruit:veto_appledouble = no
+    fruit:wipe_intentionally_left_blank_rfork = yes
+    fruit:delete_empty_adfiles = yes
+"""
+
+AVAHI_CONF = """
+<?xml version="1.0" standalone='no'?>
+<!DOCTYPE service-group SYSTEM "avahi-service.dtd">
+<service-group>
+  <name replace-wildcards="yes">%h</name>
+  <service>
+    <type>_smb._tcp</type>
+    <port>445</port>
+  </service>
+  <service>
+    <type>_device-info._tcp</type>
+    <port>0</port>
+    <txt-record>model=RackMac</txt-record>
+  </service>
+</service-group>
+"""
+
 
 class ConfigGenerator:
     def _backup_file(self, file_path):
@@ -36,15 +63,7 @@ class ConfigGenerator:
     force directory mode = 0775
 """
         if macos_optimized:
-            content += """
-    vfs objects = fruit streams_xattr
-    fruit:metadata = stream
-    fruit:model = MacSamba
-    fruit:posix_rename = yes
-    fruit:veto_appledouble = no
-    fruit:wipe_intentionally_left_blank_rfork = yes
-    fruit:delete_empty_adfiles = yes
-"""
+            content += MACOS_SETTINGS
         content += f"""
 [homes]
     comment = Home Directories
@@ -61,25 +80,9 @@ class ConfigGenerator:
 
     def create_avahi_conf(self):
         self._backup_file(AVAHI_SMB_SERVICE)
-        content = """
-<?xml version="1.0" standalone='no'?>
-<!DOCTYPE service-group SYSTEM "avahi-service.dtd">
-<service-group>
-  <name replace-wildcards="yes">%h</name>
-  <service>
-    <type>_smb._tcp</type>
-    <port>445</port>
-  </service>
-  <service>
-    <type>_device-info._tcp</type>
-    <port>0</port>
-    <txt-record>model=RackMac</txt-record>
-  </service>
-</service-group>
-"""
         os.makedirs(os.path.dirname(AVAHI_SMB_SERVICE), exist_ok=True)
         with open(AVAHI_SMB_SERVICE, "w") as f:
-            f.write(content)
+            f.write(AVAHI_CONF)
 
     def add_share_to_conf(self, share_name, share_data):
         with open(SMB_CONF, "a") as f:

@@ -3,8 +3,10 @@ from conftest import (
     get_system_user_exists,
     get_zfs_dataset_exists,
     read_smb_conf,
-    get_zfs_property
+    get_zfs_property,
+    check_smb_zfs_result
 )
+from smb_zfs.config_generator import MACOS_SETTINGS
 
 
 # --- Initial Setup State Tests ---
@@ -66,12 +68,15 @@ def test_modify_setup_change_server_settings(initial_state):
 def test_modify_setup_change_primary_pool(initial_state):
     """Test changing the primary pool with data migration."""
     # Create a user first to have data to migrate
-    run_smb_zfs_command(
-        "create user sztest_migrateuser --password 'TestPassword!' --json")
+    
+    cmd = "create user sztest_migrateuser --password 'TestPassword!' --json"
+    result = run_smb_zfs_command(cmd)
+    check_smb_zfs_result(result, "User 'sztest_migrateuser' created successfully.", json=True)
 
     # Change primary pool with data migration
-    run_smb_zfs_command(
-        "modify setup --primary-pool secondary_testpool --json")
+    cmd = "modify setup --primary-pool secondary_testpool --json"
+    result = run_smb_zfs_command(cmd)
+    check_smb_zfs_result(result, '', json=True)
 
     final_state = run_smb_zfs_command("get-state")
 
@@ -82,22 +87,13 @@ def test_modify_setup_change_primary_pool(initial_state):
 
 def test_modify_setup_macos_toggle(initial_state):
     """Test toggling macOS optimization."""
-    macos_settings = """
-    vfs objects = fruit streams_xattr
-    fruit:metadata = stream
-    fruit:model = MacSamba
-    fruit:posix_rename = yes
-    fruit:veto_appledouble = no
-    fruit:wipe_intentionally_left_blank_rfork = yes
-    fruit:delete_empty_adfiles = yes"""
-
     # Enable macOS optimization
     run_smb_zfs_command("modify setup --macos --json")
-    assert macos_settings in read_smb_conf()
+    assert MACOS_SETTINGS in read_smb_conf()
     
     # Disable macOS optimization
     run_smb_zfs_command("modify setup --no-macos --json")
-    assert macos_settings not in read_smb_conf()
+    assert MACOS_SETTINGS not in read_smb_conf()
 
 
 def test_modify_setup_default_home_quota(initial_state):
