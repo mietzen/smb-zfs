@@ -471,6 +471,7 @@ class SmbZfsManager:
     @requires_initialization
     def modify_share(self, share_name, **kwargs):
         original_state = self._state.get_data_copy()
+        original_share_name = share_name
         share_info = self._state.get_item("shares", share_name)
         if not share_info:
             raise StateItemNotFoundError("share", share_name)
@@ -502,12 +503,20 @@ class SmbZfsManager:
                 samba_config_changed = True
 
             if 'name' in kwargs and kwargs['name'] is not None:
+                new_share_name = kwargs['name'].lower()
+                dataset_path = share_info['dataset']['name']
                 dataset_path = '/'.join(
                     dataset_path.split('/')[:-1])
-                new_path = f"{dataset_path}/{kwargs['name'].lower()}"
+                new_dataset_path = f"{dataset_path}/{new_share_name}"
                 self._zfs.rename_dataset(
-                    share_info['dataset']['name'], new_path)
-                share_info['dataset']['name'] = new_path
+                    share_info['dataset']['name'], new_dataset_path)
+                share_info['dataset']['name'] = new_dataset_path
+                share_info['dataset']['mount_point'] = self._zfs.get_mountpoint(
+                    new_dataset_path)
+                self._state.set_item("shares", new_share_name, share_info)
+                share_info = self._state.get_item("shares", new_share_name)
+                self._state.delete_item("shares", original_share_name)
+                share_name = new_share_name
 
             if 'quota' in kwargs and kwargs['quota'] is not None:
                 new_quota = kwargs['quota'] if kwargs['quota'].lower(
@@ -579,7 +588,7 @@ class SmbZfsManager:
                 f"Error during setup modification: {e}. State restored, but filesystem changes might need manual rollback.", file=sys.stderr)
             raise
 
-        return {"msg": f"Share '{share_name}' modified successfully.", "state": self._state.get_data_copy()}
+        return {"msg": f"Share '{original_share_name}' modified successfully.", "state": self._state.get_data_copy()}
 
     @requires_initialization
     def modify_setup(self, **kwargs):

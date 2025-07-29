@@ -1,10 +1,11 @@
-import pytest
-import subprocess
+import json
 from conftest import (
     run_smb_zfs_command,
     get_system_user_details,
     get_zfs_property,
     read_smb_conf,
+    get_owner_and_group,
+    get_file_permissions
 )
 
 
@@ -151,26 +152,53 @@ def test_share_quota_operations(comprehensive_setup):
 def test_modify_share_all_options(comprehensive_setup):
     """Test modifying all possible share options."""
     # Create a basic share
-    run_smb_zfs_command(
+    result = run_smb_zfs_command(
         "create share modify_all --dataset shares/modify_all --json")
+    assert 'Error' not in result
+    assert type(result) == dict
+    assert 'msg' in result
+    assert 'state' in result
+    assert "Share 'modify_all' created successfully."
 
-
-    #TODO: Test rename
     # Modify all possible options
-    run_smb_zfs_command(
-        "modify share modify_all --comment 'Fully modified share' --valid-users sztest_comp_user1,sztest_comp_user2 --owner sztest_comp_user1 --group sztest_comp_group1 --perms 755 --quota 30G --readonly --no-browse --json")
-
+    result = run_smb_zfs_command(
+        "modify share modify_all --pool secondary_testpool --name modify_all_renamed --comment 'Fully modified share' --valid-users sztest_comp_user1,sztest_comp_user2 --owner sztest_comp_user1 --group sztest_comp_group1 --perms 755 --quota 30G --readonly --no-browse --json")
+    assert 'Error' not in result
+    assert type(result) == dict
+    assert 'msg' in result
+    assert 'state' in result
+    assert "Share 'modify_all' modified successfully."
+    
     state = run_smb_zfs_command("get-state")
+    smb_conf = read_smb_conf()
 
-    share_config = state['shares']['modify_all']
+    # Check State
+    share_config = state['shares']['modify_all_renamed']
     assert share_config['smb_config']['comment'] == 'Fully modified share'
     assert share_config['smb_config']['read_only'] == True
     assert share_config['smb_config']['browseable'] == False
     assert 'sztest_comp_user1' in share_config['smb_config']['valid_users']
     assert 'sztest_comp_user2' in share_config['smb_config']['valid_users']
 
+    # Check ZFS
     assert get_zfs_property(
-        'primary_testpool/shares/modify_all', 'quota') == '30G'
+        'secondary_testpool/shares/modify_all_renamed', 'type') == 'filesystem'
+    assert get_zfs_property(
+        'primary_testpool/shares/modify_all_renamed', 'type') is None
+    assert get_zfs_property(
+        'secondary_testpool/shares/modify_all_renamed', 'quota') == '30G'
+    
+    # Check Filesystem
+    assert 755 == get_file_permissions(get_zfs_property('secondary_testpool/shares/modify_all_renamed', 'mountpoint'))
+    owner, group = get_owner_and_group(get_zfs_property('secondary_testpool/shares/modify_all_renamed', 'mountpoint'))
+    assert owner == 'sztest_comp_user1'
+    assert group == 'sztest_comp_group1'
+
+    # Check smb.conf
+    assert '[modify_all_renamed]' in smb_conf
+    assert 'valid users = sztest_comp_user1,sztest_comp_user2' in smb_conf
+    assert 'read only = yes' in smb_conf
+    assert 'browseable = yes' in smb_conf
 
 
 def test_modify_setup_all_options(comprehensive_setup):
