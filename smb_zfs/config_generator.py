@@ -36,10 +36,21 @@ AVAHI_CONF = """
 class ConfigGenerator:
     def _backup_file(self, file_path):
         if os.path.exists(file_path):
-            backup_path = (
-                f"{file_path}.backup.{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-            )
+            init_backup_path = f"{file_path}.backup.init"
+            if not os.path.exists(init_backup_path):
+                # Create the initial state backup
+                shutil.copy(file_path, init_backup_path)
+            # Create the timestamped backup
+            backup_path = f"{file_path}.backup.{datetime.now().strftime('%Y%m%d_%H%M%S')}"
             shutil.copy(file_path, backup_path)
+
+    def restore_initial_state(self, file_path) -> bool:
+        init_backup_path = f"{file_path}.backup.init"
+        if os.path.exists(init_backup_path):
+            shutil.copy(init_backup_path, file_path)
+            return True
+        else:
+            return False
 
     def create_smb_conf(self, primary_pool, server_name, workgroup, macos_optimized):
         self._backup_file(SMB_CONF)

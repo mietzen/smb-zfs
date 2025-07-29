@@ -772,16 +772,12 @@ class SmbZfsManager:
                     self._zfs.destroy_dataset(user_info["dataset"]["name"])
             if self._zfs.dataset_exists(f"{primary_pool}/homes"):
                 self._zfs.destroy_dataset(f"{primary_pool}/homes")
+            if not self._config.restore_initial_state(SMB_CONF):
+                self._system.delete_gracefully(SMB_CONF)
 
         self._system.stop_services()
         self._system.disable_services()
-
-        for f in [SMB_CONF, AVAHI_SMB_SERVICE, self._state.path]:
-            if os.path.exists(f):
-                try:
-                    os.remove(f)
-                except OSError as e:
-                    print(
-                        f"Warning: could not remove file {f}: {e}", file=sys.stderr)
+        self._config.restore_initial_state(AVAHI_SMB_SERVICE)
+        self._system.delete_gracefully(self._state.path)
 
         return {"msg": "Removal completed successfully.", "state": {}}

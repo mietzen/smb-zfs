@@ -1,6 +1,8 @@
 import grp
 import pwd
 import subprocess
+import os
+import sys
 from typing import List, Optional
 
 from .errors import SmbZfsError
@@ -178,3 +180,11 @@ class System:
         """Disables core services from starting on boot."""
         self._run(["systemctl", "disable", "smbd",
                   "nmbd", "avahi-daemon"], check=False)
+
+    def delete_gracefully(self, f) -> None:
+        """Attempts to delete the specified file gracefully. Prints a warning if a removal wasn't possible."""
+        if os.path.exists(f):
+                try:
+                    os.remove(f)
+                except OSError as e:
+                    print(f"Warning: could not remove file {f}: {e}")
