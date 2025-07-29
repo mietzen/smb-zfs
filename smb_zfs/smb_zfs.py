@@ -607,7 +607,8 @@ class SmbZfsManager:
                             user_info['dataset']['name'])
                         user_info['dataset']['pool'] = new_primary_pool
                         self._state.set_item("users", username, user_info)
-
+                    
+                    #TODO: We need to recursivly move all datasets (and create the full path)
                     all_shares = self._state.list_items("shares")
                     for share_name, share_info in all_shares.items():
                         if share_info['dataset']['pool'] == old_primary_pool:

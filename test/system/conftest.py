@@ -3,6 +3,7 @@ import grp
 import io
 import json
 import os
+import stat
 import pytest
 import shlex
 import subprocess
@@ -10,42 +11,55 @@ from smb_zfs.cli import main as cli
 from smb_zfs.smb_zfs import STATE_FILE, SMB_CONF
 from unittest.mock import patch
 from contextlib import redirect_stdout, redirect_stderr
+from smb_zfs.errors import SmbZfsError
 
-
-def run_smb_zfs_command(command):
-    """Helper function to run smb-zfs commands."""
-    # The get-state command always returns JSON without a flag.
+def run_smb_zfs_command(command, user_inputs=None):
+    """Helper function to run smb-zfs commands with optional user input."""
     is_json_output = "--json" in command or command.strip().startswith("get-state")
 
     stdout_buffer = io.StringIO()
     stderr_buffer = io.StringIO()
 
-    # Redirect stdout and stderr
+    input_side_effect = user_inputs if isinstance(user_inputs, list) else [user_inputs] if user_inputs else []
+
     with redirect_stdout(stdout_buffer), redirect_stderr(stderr_buffer):
-        try:
-            with patch("sys.argv", ['smb-zfs'] + shlex.split(command)):
+        input_patch = patch("builtins.input", side_effect=input_side_effect)
+        getpass_patch = patch("getpass.getpass", side_effect=input_side_effect)
+        argv_patch = patch("sys.argv", ['smb-zfs'] + shlex.split(command))
+
+        with argv_patch, input_patch, getpass_patch:
+            try:
                 cli()
-        except SystemExit:
-            # argparse may call sys.exit(), especially on errors or --help
-            pass
+            except SystemExit:
+                pass
 
     stdout = stdout_buffer.getvalue()
     stderr = stderr_buffer.getvalue()
+
     if stderr:
         return format_text_output(f'{stdout}\n\n{stderr}')
-
     if is_json_output:
-        # Handle cases where stdout might be empty on success (e.g., some --json commands)
-        if not stdout.strip():
-            return {}
-        return json.loads(stdout)
-
+        return json.loads(stdout) if stdout.strip() else {}
     return format_text_output(stdout)
 
 
 def format_text_output(text: str) -> str:
     """Format as multiline string and remove leading / trailing whitespaces"""
     return '\n'.join(line.strip() for line in text.strip().splitlines())
+
+
+def get_file_permissions(path: str) -> int:
+    """Returns file permissions in numeric form like 755 or 644"""
+    mode = os.stat(path).st_mode
+    perm = stat.S_IMODE(mode)
+    return int(oct(perm)[-3:])
+
+def get_owner_and_group(path: str) -> tuple[str, str]:
+    """Returns the owner and group names of the file"""
+    stat_info = os.stat(path)
+    owner = pwd.getpwuid(stat_info.st_uid).pw_name
+    group = grp.getgrgid(stat_info.st_gid).gr_name
+    return owner, group
 
 
 def get_system_user_details(username):
@@ -161,10 +175,13 @@ def manage_smb_zfs_environment():
     """Fixture to set up and tear down smb-zfs for each test."""
     # Setup: Ensure a clean state before setting up
     try:
-        run_smb_zfs_command(
+        result = run_smb_zfs_command(
             "setup --primary-pool primary_testpool --secondary-pools secondary_testpool tertiary_testpool --server-name TESTSERVER --workgroup TESTGROUP")
+        if result != 'Setup completed successfully.':
+            raise SmbZfsError(result)
         yield
-        run_smb_zfs_command("remove --delete-users --delete-data --yes")
+    except Exception as e:
+        raise(e)
     finally:
         if os.path.exists(STATE_FILE):
             os.remove(STATE_FILE)

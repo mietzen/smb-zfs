@@ -113,11 +113,16 @@ class Zfs:
                 f"Required: {required_bytes}, Available: {available_bytes}"
             )
 
-        base_dataset_name = dataset_path.split('/')[-1]
+        base_dataset_name = dataset_path.split('/')[1:]
+        new_path = [new_pool]
+        for path in base_dataset_name[:-1]:
+            new_path += [path]
+            self.create_dataset('/'.join(new_path))
+        
         snapshot_name = f"moving_{int(time.time())}"
 
         source_snapshot = f"{dataset_path}@{snapshot_name}"
-        dest_dataset = f"{new_pool}/{base_dataset_name}"
+        dest_dataset = f"{new_pool}/{'/'.join(base_dataset_name)}"
         dest_snapshot = f"{dest_dataset}@{snapshot_name}"
 
         if self.dataset_exists(dest_dataset):

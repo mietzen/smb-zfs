@@ -278,22 +278,6 @@ def test_modify_share_boolean_flags(initial_state):
     assert state['shares']['bool_share']['smb_config']['browseable'] == False
 
 
-def test_modify_setup_boolean_variations(initial_state):
-    """Test setup modification boolean variations."""
-    # Enable macOS optimization
-    run_smb_zfs_command("modify setup --macos --json")
-    state = run_smb_zfs_command("get-state")
-    # Verify macOS settings are applied (implementation dependent)
-
-    # Test setting default home quota
-    run_smb_zfs_command("modify setup --default-home-quota 30G --json")
-    state = run_smb_zfs_command("get-state")
-
-    # Reset to none
-    run_smb_zfs_command("modify setup --default-home-quota none --json")
-    state = run_smb_zfs_command("get-state")
-
-
 # --- Cleanup and Deletion Edge Case Tests ---
 def test_delete_user_with_group_membership(initial_state):
     """Test deleting user who is member of groups."""
@@ -348,6 +332,8 @@ def test_delete_share_with_dependencies(initial_state):
 # --- Complex Remove Scenario Tests ---
 def test_remove_users_with_complex_setup():
     """Test remove command with complex setup."""
+    run_smb_zfs_command("remove --delete-users --delete-data --yes")
+    
     # Create complex setup
     run_smb_zfs_command(
         "setup --primary-pool primary_testpool --secondary-pools secondary_testpool tertiary_testpool --server-name COMPLEXTEST --workgroup COMPLEXGROUP --macos --default-home-quota 25G")
@@ -378,6 +364,7 @@ def test_remove_users_with_complex_setup():
 # --- Complex Remove Scenario Tests ---
 def test_remove_data_with_complex_setup():
     """Test remove command with complex setup."""
+    run_smb_zfs_command("remove --delete-users --delete-data --yes")
 
     # Create complex setup
     run_smb_zfs_command(
@@ -416,19 +403,6 @@ def test_invalid_parameter_combinations(initial_state):
     result = run_smb_zfs_command(
         "modify group sztest_comp_group1 --json")
     assert result == "Error: Found no users to add or remove!"
-
-
-def test_password_security_handling(initial_state):
-    """Test password handling security."""
-    # Test that passwords aren't exposed in process lists or error messages
-    # This is more of a security test and would need special verification
-
-    # create user with password
-    run_smb_zfs_command(
-        "create user sztest_security_user --password 'SecretPassword123!' --json")
-
-    # Verify user was created successfully
-    assert get_system_user_details('sztest_security_user') is not None
 
 
 # --- Dataset Structure Tests ---
@@ -505,7 +479,7 @@ def test_comprehensive_workflow(initial_state):
     departments = ['sztest_engineering', 'sztest_marketing', 'sztest_finance']
     for dept in departments:
         run_smb_zfs_command(
-            f"create group sztest_{dept} --description '{dept.capitalize()} department' --json")
+            f"create group {dept} --description '{dept.capitalize()} department' --json")
 
     # 2. Create users for each department
     users = [

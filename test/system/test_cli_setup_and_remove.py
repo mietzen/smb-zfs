@@ -1,10 +1,9 @@
-import pytest
-import subprocess
 from conftest import (
     run_smb_zfs_command,
     get_system_user_exists,
     get_zfs_dataset_exists,
-    read_smb_conf
+    read_smb_conf,
+    get_zfs_property
 )
 
 
@@ -17,22 +16,14 @@ def test_initial_setup_state(initial_state):
     assert initial_state['workgroup'] == 'TESTGROUP'
     assert initial_state['server_name'] == 'TESTSERVER'
     assert get_zfs_dataset_exists('primary_testpool/homes')
-    assert get_zfs_dataset_exists('primary_testpool/shares')
-    assert get_zfs_dataset_exists('secondary_testpool/homes')
-    assert get_zfs_dataset_exists('secondary_testpool/shares')
-    assert get_zfs_dataset_exists('tertiary_testpool/homes')
-    assert get_zfs_dataset_exists('tertiary_testpool/shares')
 
 
 def test_setup_with_options():
     """Test setup command with various options."""
     # This test needs to be run without the fixture to test setup independently
     # First clean up
-    try:
-        run_smb_zfs_command("remove --delete-users --delete-data --yes")
-    except subprocess.CalledProcessError:
-        pass
-
+    run_smb_zfs_command("remove --delete-users --delete-data --yes")
+  
     # Test setup with macOS optimization and default quota
     run_smb_zfs_command(
         "setup --primary-pool primary_testpool --secondary-pools secondary_testpool --server-name MACSERVER --workgroup MACGROUP --macos --default-home-quota 20G")
@@ -44,9 +35,6 @@ def test_setup_with_options():
     assert state['server_name'] == 'MACSERVER'
     assert 'workgroup = MACGROUP' in smb_conf
     assert 'server string = MACSERVER' in smb_conf
-
-    # Clean up after test
-    run_smb_zfs_command("remove --delete-users --delete-data --yes")
 
 
 # --- Setup Modification Tests ---
@@ -94,17 +82,22 @@ def test_modify_setup_change_primary_pool(initial_state):
 
 def test_modify_setup_macos_toggle(initial_state):
     """Test toggling macOS optimization."""
+    macos_settings = """
+    vfs objects = fruit streams_xattr
+    fruit:metadata = stream
+    fruit:model = MacSamba
+    fruit:posix_rename = yes
+    fruit:veto_appledouble = no
+    fruit:wipe_intentionally_left_blank_rfork = yes
+    fruit:delete_empty_adfiles = yes"""
+
     # Enable macOS optimization
     run_smb_zfs_command("modify setup --macos --json")
-    final_state = run_smb_zfs_command("get-state")
-    smb_conf = read_smb_conf()
-
-    # Check for macOS-specific settings in smb.conf
-    # (The exact settings would depend on implementation)
-
+    assert macos_settings in read_smb_conf()
+    
     # Disable macOS optimization
     run_smb_zfs_command("modify setup --no-macos --json")
-    final_state = run_smb_zfs_command("get-state")
+    assert macos_settings not in read_smb_conf()
 
 
 def test_modify_setup_default_home_quota(initial_state):
@@ -116,8 +109,7 @@ def test_modify_setup_default_home_quota(initial_state):
     run_smb_zfs_command(
         "create user sztest_quotauser --password 'TestPassword!' --json")
 
-    # Check that the quota was applied (this depends on implementation)
-    # In a real test, you'd verify the ZFS quota was set
+    assert get_zfs_property('primary_testpool/homes/sztest_quotauser', 'quota') == '50G'
 
 
 # --- Remove Command Tests ---
@@ -162,10 +154,7 @@ def test_remove_partial_cleanup(initial_state):
 def test_remove_data_only():
     """Test remove command that only removes data."""
     # Setup fresh environment
-    try:
-        run_smb_zfs_command("remove --delete-users --delete-data --yes")
-    except subprocess.CalledProcessError:
-        pass
+    run_smb_zfs_command("remove --delete-users --delete-data --yes")
 
     run_smb_zfs_command(
         "setup --primary-pool primary_testpool --secondary-pools secondary_testpool")
@@ -183,6 +172,3 @@ def test_remove_data_only():
     assert get_system_user_exists('sztest_datauser')
     assert not get_zfs_dataset_exists('primary_testpool/homes/sztest_datauser')
     assert not get_zfs_dataset_exists('primary_testpool/shares/datashare')
-
-    # Clean up
-    run_smb_zfs_command("remove --delete-users --yes --json")

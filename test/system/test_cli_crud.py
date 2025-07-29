@@ -4,7 +4,9 @@ from conftest import (
     get_system_user_shell,
     get_system_group_exists,
     get_zfs_property,
-    read_smb_conf
+    read_smb_conf,
+    get_file_permissions,
+    get_owner_and_group
 )
 
 
@@ -251,8 +253,6 @@ def test_modify_share_change_pool(basic_users_and_groups):
     run_smb_zfs_command(
         "modify share poolshare --pool secondary_testpool --json")
 
-    final_state = run_smb_zfs_command("get-state")
-
     # Check that the share dataset is now on the secondary pool
     assert get_zfs_property(
         'secondary_testpool/shares/poolshare', 'type') == 'filesystem'
@@ -266,14 +266,18 @@ def test_modify_share_permissions(basic_users_and_groups):
     run_smb_zfs_command(
         "create share permshare --dataset shares/permshare --pool primary_testpool --json")
 
+    assert 775 == get_file_permissions(get_zfs_property('primary_testpool/shares/permshare', 'mountpoint'))
+    owner, group = get_owner_and_group(get_zfs_property('primary_testpool/shares/permshare', 'mountpoint'))
+    assert owner == 'root'
+    assert group == 'smb_users'
     # Modify ownership and permissions
-    run_smb_zfs_command(
-        "modify share permshare --owner sztest_user_a --group test_group --perms 755 --json")
+    result = run_smb_zfs_command(
+        "modify share permshare --owner sztest_user_a --group sztest_test_group --perms 755 --json")
 
-    final_state = run_smb_zfs_command("get-state")
-
-    # These would need to be verified via actual file system checks in a real test
-    # For now, verify the command structure works
+    assert 755 == get_file_permissions(get_zfs_property('primary_testpool/shares/permshare', 'mountpoint'))
+    owner, group = get_owner_and_group(get_zfs_property('primary_testpool/shares/permshare', 'mountpoint'))
+    assert owner == 'sztest_user_a'
+    assert group == 'sztest_test_group'
 
 
 def test_modify_share_browseable(basic_users_and_groups):

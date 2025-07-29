@@ -154,12 +154,13 @@ def test_modify_share_all_options(comprehensive_setup):
     run_smb_zfs_command(
         "create share modify_all --dataset shares/modify_all --json")
 
+
+    #TODO: Test rename
     # Modify all possible options
     run_smb_zfs_command(
         "modify share modify_all --comment 'Fully modified share' --valid-users sztest_comp_user1,sztest_comp_user2 --owner sztest_comp_user1 --group sztest_comp_group1 --perms 755 --quota 30G --readonly --no-browse --json")
 
     state = run_smb_zfs_command("get-state")
-    smb_conf = read_smb_conf()
 
     share_config = state['shares']['modify_all']
     assert share_config['smb_config']['comment'] == 'Fully modified share'
@@ -212,12 +213,49 @@ def test_list_command_outputs(comprehensive_setup):
     assert 'secondary_testpool' in pools_output
 
 
-# --- Edge Case Tests ---
-def test_empty_password_handling():
+def test_password_error_handling():
     """Test handling of empty or missing passwords."""
-    # This would need interactive testing or mocking in a real environment
-    # For now, verify the command structure
-    pass
+    result = run_smb_zfs_command(
+        "create user sztest_test_user_123", [''])
+    assert 'Password cannot be empty.' in result
+
+    result = run_smb_zfs_command(
+        "create user sztest_test_user_123", ['t'])
+    assert "Password is not strong enough:" in result
+    assert "- It must be at least 8 characters long." in result
+    assert "- It must contain at least one digit." in result
+    assert "- It must contain at least one uppercase letter." in result
+    assert "- It must contain at least one symbol." in result
+
+    result = run_smb_zfs_command(
+        "create user sztest_test_user_123", ['T'])
+    assert "Password is not strong enough:" in result
+    assert "- It must be at least 8 characters long." in result
+    assert "- It must contain at least one digit." in result
+    assert "- It must contain at least one lowercase letter." in result
+    assert "- It must contain at least one symbol." in result
+
+    result = run_smb_zfs_command(
+        "create user sztest_test_user_123", ['T1'])
+    assert "Password is not strong enough:" in result
+    assert "- It must be at least 8 characters long." in result
+    assert "- It must contain at least one lowercase letter." in result
+    assert "- It must contain at least one symbol." in result
+
+    result = run_smb_zfs_command(
+        "create user sztest_test_user_123", ['T1e'])
+    assert "Password is not strong enough:" in result
+    assert "- It must be at least 8 characters long." in result
+    assert "- It must contain at least one symbol." in result
+
+    result = run_smb_zfs_command(
+        "create user sztest_test_user_123", ['T1e$'])
+    assert "Password is not strong enough:" in result
+    assert "- It must be at least 8 characters long." in result
+
+    result = run_smb_zfs_command(
+        "create user sztest_test_user_123", ['T1e$T1e$', 'A1e$T1e$'])
+    assert "Passwords do not match. Please try again."
 
 
 def test_special_characters_in_names(comprehensive_setup):
