@@ -469,7 +469,9 @@ class SmbZfsManager:
         return {"msg": f"Group '{groupname}' modified successfully.", "state": self._state.get_data_copy()}
 
     @requires_initialization
-    def modify_share(self, share_name, **kwargs):
+    def modify_share(self, share_name, name=None, pool=None, quota=None,
+                     owner=None, group=None, permissions=None, comment=None,
+                     valid_users=None, read_only=None, browseable=None):
         original_state = self._state.get_data_copy()
         original_share_name = share_name
         share_info = self._state.get_item("shares", share_name)
@@ -477,70 +479,63 @@ class SmbZfsManager:
             raise StateItemNotFoundError("share", share_name)
 
         samba_config_changed = False
-        new_dataset_path = None
         try:
-            if 'pool' in kwargs and kwargs['pool'] is not None and kwargs['pool'] != share_info['dataset']['pool']:
-                new_pool = kwargs['pool']
+            # Handle pool change (move dataset)
+            if pool is not None and pool != share_info['dataset']['pool']:
                 primary_pool = self._state.get("primary_pool")
                 secondary_pools = self._state.get("secondary_pools", [])
-                managed_pools = [primary_pool] + secondary_pools
-                if new_pool not in managed_pools:
-                    raise SmbZfsError(
-                        f"Target pool '{new_pool}' is not a valid managed pool.")
+                if pool not in ([primary_pool] + secondary_pools):
+                    raise SmbZfsError(f"Target pool '{pool}' is not a valid managed pool.")
+                
+                old_dataset_name = share_info['dataset']['name']
+                dataset_path_in_pool = '/'.join(old_dataset_name.split('/')[1:])
+                new_dataset_name = f"{pool}/{dataset_path_in_pool}"
 
-                dataset_path = share_info['dataset']['name']
-                dataset_path_in_pool = '/'.join(
-                    dataset_path.split('/')[1:])
-
-                self._zfs.move_dataset(dataset_path, new_pool)
-
-                new_dataset_path = f"{new_pool}/{dataset_path_in_pool}"
-
-                share_info['dataset']['pool'] = new_pool
-                share_info['dataset']['name'] = new_dataset_path
-                share_info['dataset']['mount_point'] = self._zfs.get_mountpoint(
-                    new_dataset_path)
+                self._zfs.move_dataset(old_dataset_name, pool)
+                share_info['dataset']['pool'] = pool
+                share_info['dataset']['name'] = new_dataset_name
+                share_info['dataset']['mount_point'] = self._zfs.get_mountpoint(new_dataset_name)
                 samba_config_changed = True
 
-            if 'name' in kwargs and kwargs['name'] is not None:
-                new_share_name = kwargs['name'].lower()
-                dataset_path = share_info['dataset']['name']
-                dataset_path = '/'.join(
-                    dataset_path.split('/')[:-1])
-                new_dataset_path = f"{dataset_path}/{new_share_name}"
-                self._zfs.rename_dataset(
-                    share_info['dataset']['name'], new_dataset_path)
-                share_info['dataset']['name'] = new_dataset_path
-                share_info['dataset']['mount_point'] = self._zfs.get_mountpoint(
-                    new_dataset_path)
-                self._state.set_item("shares", new_share_name, share_info)
-                share_info = self._state.get_item("shares", new_share_name)
-                self._state.delete_item("shares", original_share_name)
-                share_name = new_share_name
+            # Handle share rename (rename dataset)
+            if name is not None:
+                new_share_name = name.lower()
+                current_dataset_path = share_info['dataset']['name']
+                parent_dataset_path = '/'.join(current_dataset_path.split('/')[:-1])
+                new_dataset_name = f"{parent_dataset_path}/{new_share_name}"
 
-            if 'quota' in kwargs and kwargs['quota'] is not None:
-                new_quota = kwargs['quota'] if kwargs['quota'].lower(
-                ) != 'none' else 'none'
+                self._zfs.rename_dataset(current_dataset_path, new_dataset_name)
+                share_info['dataset']['name'] = new_dataset_name
+                share_info['dataset']['mount_point'] = self._zfs.get_mountpoint(new_dataset_name)
+                
+                self._state.set_item("shares", new_share_name, share_info)
+                share_info = self._state.get_item("shares", new_share_name) # Re-fetch info under new key
+                self._state.delete_item("shares", original_share_name)
+                share_name = new_share_name # Update for subsequent operations in this call
+                samba_config_changed = True
+
+            # Handle ZFS quota
+            if quota is not None:
+                new_quota = 'none' if str(quota).lower() == 'none' else quota
                 share_info['dataset']['quota'] = new_quota
                 self._zfs.set_quota(share_info["dataset"]["name"], new_quota)
 
+            # Handle filesystem ownership and permissions
             system_changed = False
-            if 'owner' in kwargs and kwargs['owner'] is not None:
-                if not self._system.user_exists(kwargs['owner']):
-                    raise StateItemNotFoundError("user", kwargs['owner'])
-                share_info['system']['owner'] = kwargs['owner']
+            if owner is not None:
+                if not self._system.user_exists(owner):
+                    raise StateItemNotFoundError("user", owner)
+                share_info['system']['owner'] = owner
                 system_changed = True
-            if 'group' in kwargs and kwargs['group'] is not None:
-                if not self._system.group_exists(kwargs['group']):
-                    raise StateItemNotFoundError("group", kwargs['group'])
-                share_info['system']['group'] = kwargs['group']
+            if group is not None:
+                if not self._system.group_exists(group):
+                    raise StateItemNotFoundError("group", group)
+                share_info['system']['group'] = group
                 system_changed = True
-            if 'permissions' in kwargs and kwargs['permissions'] is not None:
-                perms = kwargs['permissions']
-                if not re.match(r"^[0-7]{3,4}$", perms):
-                    raise InvalidNameError(
-                        f"Permissions '{perms}' are invalid. Must be 3 or 4 octal digits (e.g., 775 or 0775).")
-                share_info['system']['permissions'] = perms
+            if permissions is not None:
+                if not re.match(r"^[0-7]{3,4}$", permissions):
+                    raise InvalidNameError(f"Permissions '{permissions}' are invalid.")
+                share_info['system']['permissions'] = permissions
                 system_changed = True
 
             if system_changed:
@@ -548,44 +543,41 @@ class SmbZfsManager:
                 uid = pwd.getpwnam(share_info['system']['owner']).pw_uid
                 gid = grp.getgrnam(share_info['system']['group']).gr_gid
                 os.chown(mount_point, uid, gid)
-                os.chmod(mount_point, int(
-                    share_info['system']['permissions'], 8))
+                os.chmod(mount_point, int(share_info['system']['permissions'], 8))
+            
+            # Handle Samba-specific config
+            if comment is not None:
+                share_info['smb_config']['comment'] = comment
                 samba_config_changed = True
-
-            if 'comment' in kwargs and kwargs['comment'] is not None:
-                share_info['smb_config']['comment'] = kwargs['comment']
-                samba_config_changed = True
-            if 'valid_users' in kwargs and kwargs['valid_users'] is not None:
-                for item in kwargs['valid_users'].replace(" ", "").split(','):
+            if valid_users is not None:
+                # Validation logic for users/groups
+                for item in valid_users.replace(" ", "").split(','):
                     item_name = item.lstrip('@')
-                    if '@' in item:
-                        if not self._system.group_exists(item_name):
-                            raise StateItemNotFoundError("group", item_name)
-                    else:
-                        if not self._system.user_exists(item_name):
-                            raise StateItemNotFoundError("user", item_name)
-                share_info['smb_config']['valid_users'] = kwargs['valid_users']
+                    if '@' in item and not self._system.group_exists(item_name):
+                        raise StateItemNotFoundError("group", item_name)
+                    elif '@' not in item and not self._system.user_exists(item_name):
+                        raise StateItemNotFoundError("user", item_name)
+                share_info['smb_config']['valid_users'] = valid_users
                 samba_config_changed = True
-            if 'read_only' in kwargs:
-                share_info['smb_config']['read_only'] = kwargs['read_only']
+            if read_only is not None:
+                share_info['smb_config']['read_only'] = read_only
                 samba_config_changed = True
-            if 'browseable' in kwargs:
-                share_info['smb_config']['browseable'] = kwargs['browseable']
+            if browseable is not None:
+                share_info['smb_config']['browseable'] = browseable
                 samba_config_changed = True
 
             self._state.set_item("shares", share_name, share_info)
 
             if samba_config_changed:
-                self._config.remove_share_from_conf(share_name)
-                self._config.add_share_to_conf(share_name, share_info)
+                self._config.remove_share_from_conf(original_share_name) # Always remove the old name
+                self._config.add_share_to_conf(share_name, share_info) # Add the new/modified share
                 self._system.test_samba_config()
                 self._system.reload_samba()
 
         except Exception as e:
             self._state.data = original_state
             self._state.save()
-            print(
-                f"Error during setup modification: {e}. State restored, but filesystem changes might need manual rollback.", file=sys.stderr)
+            print(f"Error during share modification: {e}. State restored, but filesystem changes might need manual rollback.", file=sys.stderr)
             raise
 
         return {"msg": f"Share '{original_share_name}' modified successfully.", "state": self._state.get_data_copy()}

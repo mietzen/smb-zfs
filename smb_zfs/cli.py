@@ -163,7 +163,8 @@ def cmd_modify_group(manager, args):
 @handle_exception
 def cmd_modify_share(manager, args):
     """Handler for the 'modify share' command."""
-    kwargs = {
+    modifications = {
+        'name': args.name,
         'comment': args.comment,
         'valid_users': args.valid_users,
         'permissions': args.perms,
@@ -171,31 +172,38 @@ def cmd_modify_share(manager, args):
         'group': args.group,
         'quota': args.quota,
         'pool': args.pool,
-        'name': args.name
+        'read_only': args.readonly,
+        'browseable': args.no_browse
     }
 
-    if args.no_browse is not None:
-        kwargs['browseable'] = args.no_browse
+    # Filter out any keys where the value is None
+    active_modifications = {k: v for k, v in modifications.items() if v is not None}
 
-    if args.readonly is not None:
-        kwargs['read_only'] = args.readonly
-
-    # Filter out unset arguments
-    kwargs = {k: v for k, v in kwargs.items() if v is not None}
-
-    if not kwargs:
+    if not active_modifications:
         print("No modifications specified. Use --help to see options.", file=sys.stderr)
         return
 
     if args.dry_run:
         print("--- Dry Run ---")
         print(f"Would modify share '{args.share}' with the following changes:")
-        for key, value in kwargs.items():
+        for key, value in active_modifications.items():
             print(f"  - Set {key} to: {value}")
         return
 
     check_root()
-    result = manager.modify_share(args.share, **kwargs)
+    result = manager.modify_share(
+        args.share,
+        name=args.name,
+        comment=args.comment,
+        valid_users=args.valid_users,
+        permissions=args.perms,
+        owner=args.owner,
+        group=args.group,
+        quota=args.quota,
+        pool=args.pool,
+        read_only=args.readonly,
+        browseable=args.no_browse
+    )
     _handle_output(result, args)
 
 @handle_exception
