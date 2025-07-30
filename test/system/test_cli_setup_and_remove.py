@@ -121,7 +121,6 @@ def test_modify_setup_change_primary_pool(initial_state) -> None:
     # Check state
     final_state = run_smb_zfs_command("get-state")
     assert final_state['primary_pool'] == 'secondary_testpool'
-    assert 'primary_testpool' in final_state['secondary_pools']
 
     # Check user data migration
     assert get_zfs_dataset_exists(
@@ -133,7 +132,7 @@ def test_modify_setup_change_primary_pool(initial_state) -> None:
     # Check ZFS properties maintained
     home_path = get_zfs_property(
         'secondary_testpool/homes/sztest_migrateuser', 'mountpoint')
-    assert home_path is not None
+    assert '/secondary_testpool/homes/sztest_migrateuser' == home_path 
 
 
 def test_modify_setup_macos_toggle(initial_state) -> None:

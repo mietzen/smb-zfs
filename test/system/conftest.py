@@ -98,13 +98,13 @@ def get_system_user_shell(username):
     """Get shell for a system user."""
     try:
         result = subprocess.run(
-            f"getent passwd {username} " + "| awk -F: '{print $NF}'",
+            f"getent passwd {username}",
             shell=True,
             check=True,
             capture_output=True,
             text=True
         )
-        return result.stdout
+        return result.stdout.split(':')[-1].strip()
     except subprocess.CalledProcessError:
         return None
 

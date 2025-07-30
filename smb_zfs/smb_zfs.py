@@ -603,13 +603,10 @@ class SmbZfsManager:
                     if new_primary_pool not in self._zfs.list_pools():
                         raise StateItemNotFoundError(
                             "ZFS pool", new_primary_pool)
-
-                    print("Moving data from old primary pool to new primary pool...")
-                    self._zfs.move_dataset(
-                        f"{old_primary_pool}/homes", new_primary_pool)
-
                     all_users = self._state.list_items("users")
                     for username, user_info in all_users.items():
+                        self._zfs.move_dataset(
+                        user_info['dataset']['name'], new_primary_pool)
                         user_info['dataset']['name'] = user_info['dataset']['name'].replace(
                             old_primary_pool, new_primary_pool, 1)
                         user_info['dataset']['mount_point'] = self._zfs.get_mountpoint(
