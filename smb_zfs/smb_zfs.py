@@ -85,9 +85,7 @@ class SmbZfsManager:
             raise NotInitializedError()
 
     def _validate_name(self, name, item_type):
-        """
-        Validates that a name adheres to the specific rules for its type.
-        """
+        """Validates that a name adheres to the specific rules for its type."""
         item_type_lower = item_type.lower()
 
         if item_type_lower in ["user", "group", "owner"]:
@@ -100,12 +98,18 @@ class SmbZfsManager:
                     "underscores, or hyphens, and be max 32 characters."
                 )
         elif item_type_lower == "share":
-            # Samba share name validation: Alphanumeric, period, underscore, hyphen.
-            # Max 80 chars.
-            if not re.match(r"^[a-zA-Z0-9._-]{1,80}$", name):
+            # Share name validation:
+            # - Starts with alphanumeric
+            # - Contains only alphanumeric, _, -, ., :
+            # - Max 80 characters (SMB)
+            # - No empty components (i.e., no '..', '__', etc.)
+
+            if not re.match(r"^[a-zA-Z0-9][a-zA-Z0-9_.\-:]{0,79}$", name) or \
+            any(component == "" for component in re.split(r"[._\-:]", name)):
                 raise InvalidNameError(
-                    f"Share name '{name}' is invalid. It can only contain letters, "
-                    "numbers, periods, underscores, or hyphens, and be 1-80 characters."
+                    f"Share name '{name}' is invalid. It must start with a letter or number, "
+                    "contain only alphanumeric characters, underscores (_), hyphens (-), colons (:), or periods (.), "
+                    "have no empty components, and be 1–80 characters long."
                 )
         else:
             if not re.match(r"^[a-zA-Z0-9._-]+$", name):
