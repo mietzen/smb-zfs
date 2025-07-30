@@ -26,11 +26,12 @@ _smb_zfs_completion() {
     _get_comp_words_by_ref -n : cur prev words cword
 
     # Define all possible commands, sub-commands, and global options.
-    local commands="setup create modify list delete passwd remove get-state"
+    local commands="setup create modify list delete passwd remove get-state wizard"
     local create_opts="user share group"
     local modify_opts="group share setup home"
     local delete_opts="user share group"
     local list_opts="users shares groups pools"
+    local wizard_opts="setup create modify delete remove"
     local global_opts="-h --help --version --verbose"
 
     # Completion for the first argument (the main command).
@@ -42,31 +43,28 @@ _smb_zfs_completion() {
     local command="${words[1]}"
     case "${command}" in
         setup)
-            local opts="--primary-pool --secondary-pools --server-name --workgroup --macos --default-home-quota --dry-run --json"
+            local opts="--primary-pool --secondary-pools --server-name --workgroup --macos --default-home-quota --dry-run --json --verbose"
             COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
             ;;
         create)
-            # Complete the sub-command (user, share, group)
             if [ "$cword" -eq 2 ]; then
                 COMPREPLY=( $(compgen -W "${create_opts}" -- "${cur}") )
                 return 0
             fi
-            # Complete options based on the sub-command
             local sub_command="${words[2]}"
+            local opts=""
             case "${sub_command}" in
                 user)
-                    local opts="--password --shell --groups --no-home --dry-run --json"
-                    COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                    opts="--password --shell --groups --no-home --dry-run --json --verbose"
                     ;;
                 share)
-                    local opts="--dataset --pool --comment --owner --group --perms --valid-users --readonly --no-browse --quota --dry-run --json"
-                    COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                    opts="--dataset --pool --comment --owner --group --perms --valid-users --readonly --no-browse --quota --dry-run --json --verbose"
                     ;;
                 group)
-                    local opts="--description --users --dry-run --json"
-                    COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                    opts="--description --users --dry-run --json --verbose"
                     ;;
             esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
             ;;
         modify)
             if [ "$cword" -eq 2 ]; then
@@ -74,9 +72,9 @@ _smb_zfs_completion() {
                 return 0
             fi
             local sub_command="${words[2]}"
+            local opts=""
             case "${sub_command}" in
                 group|share|home)
-                    # Dynamically complete the item name (e.g., the group to modify)
                     if [ "$cword" -eq 3 ]; then
                         local item_type="users" # for home
                         if [ "${sub_command}" != "home" ]; then
@@ -85,23 +83,19 @@ _smb_zfs_completion() {
                         COMPREPLY=( $(compgen -W "$(_get_managed_items ${item_type})" -- "${cur}") )
                         return 0
                     fi
-                    # Complete options for the specific modify sub-command
                     if [ "${sub_command}" == "group" ]; then
-                        local opts="--add-users --remove-users --dry-run --json"
-                        COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                        opts="--add-users --remove-users --dry-run --json --verbose"
                     elif [ "${sub_command}" == "share" ]; then
-                        local opts="--name --pool --comment --valid-users --readonly --no-readonly --no-browse --browse --perms --owner --group --quota --dry-run --json"
-                        COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                        opts="--name --pool --comment --valid-users --readonly --no-readonly --no-browse --browse --perms --owner --group --quota --dry-run --json --verbose"
                     elif [ "${sub_command}" == "home" ]; then
-                        local opts="--quota --dry-run --json"
-                        COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                        opts="--quota --dry-run --json --verbose"
                     fi
                     ;;
                 setup)
-                    local opts="--primary-pool --add-secondary-pools --remove-secondary-pools --server-name --workgroup --macos --no-macos --default-home-quota --dry-run --json"
-                    COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                    opts="--primary-pool --add-secondary-pools --remove-secondary-pools --server-name --workgroup --macos --no-macos --default-home-quota --dry-run --json --verbose"
                     ;;
             esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
             ;;
         list)
             if [ "$cword" -eq 2 ]; then
@@ -114,38 +108,54 @@ _smb_zfs_completion() {
                 return 0
             fi
             local sub_command="${words[2]}"
-            # Dynamically complete the name of the item to delete
             if [ "$cword" -eq 3 ]; then
                 COMPREPLY=( $(compgen -W "$(_get_managed_items ${sub_command}s)" -- "${cur}") )
                 return 0
             fi
-            # Complete options for delete commands
-            local opts="--delete-data --yes --dry-run --json"
+            local opts="--delete-data --yes --dry-run --json --verbose"
             COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
             ;;
         passwd)
-            # Dynamically complete the username for the password change
             if [ "$cword" -eq 2 ]; then
                 COMPREPLY=( $(compgen -W "$(_get_managed_items users)" -- "${cur}") )
+                return 0
             fi
-             if [ "$cword" -eq 3 ]; then
-                local opts="--json"
+            if [ "$cword" -eq 3 ]; then
+                local opts="--json --verbose"
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
             fi
             ;;
         remove)
-            local opts="--delete-data --delete-users --yes --dry-run --json"
+            local opts="--delete-data --delete-users --yes --dry-run --json --verbose"
             COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            ;;
+        wizard)
+            if [ "$cword" -eq 2 ]; then
+                COMPREPLY=( $(compgen -W "${wizard_opts}" -- "${cur}") )
+                return 0
+            fi
+            local wizard_sub_command="${words[2]}"
+            case "${wizard_sub_command}" in
+                create)
+                    COMPREPLY=( $(compgen -W "${create_opts}" -- "${cur}") )
+                    ;;
+                modify)
+                    COMPREPLY=( $(compgen -W "${modify_opts}" -- "${cur}") )
+                    ;;
+                delete)
+                    COMPREPLY=( $(compgen -W "${delete_opts}" -- "${cur}") )
+                    ;;
+                *)
+                    # No further completions after a wizard command is selected
+                    COMPREPLY=()
+                    ;;
+            esac
             ;;
         get-state)
             # No options for get-state
             COMPREPLY=()
             ;;
     esac
-
-    # Add global verbose flag to any option list
-    local all_opts="${opts} --verbose"
-    COMPREPLY=( $(compgen -W "${all_opts}" -- "${cur}") )
 
     return 0
 }
