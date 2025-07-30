@@ -31,7 +31,7 @@ _smb_zfs_completion() {
     local modify_opts="group share setup home"
     local delete_opts="user share group"
     local list_opts="users shares groups pools"
-    local global_opts="-h --help -v --version"
+    local global_opts="-h --help --version --verbose"
 
     # Completion for the first argument (the main command).
     if [ "$cword" -eq 1 ]; then
@@ -90,7 +90,7 @@ _smb_zfs_completion() {
                         local opts="--add-users --remove-users --dry-run --json"
                         COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                     elif [ "${sub_command}" == "share" ]; then
-                        local opts="--pool --comment --valid-users --readonly --no-browse --perms --owner --group --quota --dry-run --json"
+                        local opts="--name --pool --comment --valid-users --readonly --no-readonly --no-browse --browse --perms --owner --group --quota --dry-run --json"
                         COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                     elif [ "${sub_command}" == "home" ]; then
                         local opts="--quota --dry-run --json"
@@ -98,7 +98,7 @@ _smb_zfs_completion() {
                     fi
                     ;;
                 setup)
-                    local opts="--primary-pool --move-data --add-secondary-pools --remove-secondary-pools --server-name --workgroup --macos --default-home-quota --dry-run --json"
+                    local opts="--primary-pool --add-secondary-pools --remove-secondary-pools --server-name --workgroup --macos --no-macos --default-home-quota --dry-run --json"
                     COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                     ;;
             esac
@@ -142,6 +142,10 @@ _smb_zfs_completion() {
             COMPREPLY=()
             ;;
     esac
+
+    # Add global verbose flag to any option list
+    local all_opts="${opts} --verbose"
+    COMPREPLY=( $(compgen -W "${all_opts}" -- "${cur}") )
 
     return 0
 }

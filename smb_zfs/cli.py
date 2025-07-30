@@ -12,6 +12,7 @@ from .smb_zfs import SmbZfsManager
 from .errors import SmbZfsError
 from .const import NAME, SMB_CONF, AVAHI_SMB_SERVICE
 from .utils import prompt_for_password, confirm_destructive_action, handle_exception, check_root
+from .smb_zfs_wizard import add_wizard_subparsers
 
 # Setup root logger for the application
 log = logging.getLogger(__name__.split('.')[0])
@@ -421,9 +422,8 @@ def cmd_get_state(manager: SmbZfsManager, args: argparse.Namespace) -> None:
     state = manager.get_state()
     print(json.dumps(state, indent=2))
 
-
-def main() -> None:
-    """The main entry point for the CLI application."""
+def create_parser() -> argparse.ArgumentParser:
+    """Creates and configures the argument parser for the CLI."""
     parser = argparse.ArgumentParser(
         prog=NAME,
         description="A tool to manage Samba on a ZFS-backed system.",
@@ -435,11 +435,14 @@ def main() -> None:
         '-v', '--verbose', action='count', default=0,
         help="Increase verbosity level (-v for warning, -vv for info, -vvv for debug)."
     )
-
+    
     subparsers = parser.add_subparsers(
         dest="command", required=True, help="Available commands"
     )
 
+    # --- Add Wizard Commands ---
+    add_wizard_subparsers(subparsers)
+    
     # --- Setup Parser ---
     p_setup = subparsers.add_parser(
         "setup", help="Set up and configure Samba, ZFS, and Avahi."
@@ -471,7 +474,7 @@ def main() -> None:
         "--json", action="store_true", help="Output result as a JSON object."
     )
     p_setup.set_defaults(func=cmd_setup)
-
+    
     # --- Create Parser ---
     p_create = subparsers.add_parser(
         "create", help="Create a new user, share, or group."
@@ -577,7 +580,7 @@ def main() -> None:
         "--json", action="store_true", help="Output result as a JSON object."
     )
     p_create_group.set_defaults(func=cmd_create_group)
-
+    
     # --- Modify Parser ---
     p_modify = subparsers.add_parser(
         "modify", help="Modify an existing user, share, or group.")
@@ -661,7 +664,7 @@ def main() -> None:
         "--json", action="store_true", help="Output result as a JSON object."
     )
     p_modify_home.set_defaults(func=cmd_modify_home)
-
+    
     # --- Delete Parser ---
     p_delete = subparsers.add_parser(
         "delete", help="Delete a user, share, or group.")
@@ -721,7 +724,7 @@ def main() -> None:
         "--json", action="store_true", help="Output result as a JSON object."
     )
     p_delete_group.set_defaults(func=cmd_delete_group)
-
+    
     # --- Other Parsers ---
     p_list = subparsers.add_parser(
         "list", help="List all managed users, shares, groups or pools.")
@@ -770,7 +773,12 @@ def main() -> None:
         "get-state", help="Print the current state as JSON."
     )
     p_get_state.set_defaults(func=cmd_get_state)
+    
+    return parser
 
+def main() -> None:
+    """The main entry point for the CLI application."""
+    parser = create_parser()
     args = parser.parse_args()
 
     # --- Setup Logging ---
