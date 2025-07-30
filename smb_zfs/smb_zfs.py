@@ -591,59 +591,68 @@ class SmbZfsManager:
         return {"msg": f"Share '{original_share_name}' modified successfully.", "state": self._state.get_data_copy()}
 
     @requires_initialization
-    def modify_setup(self, **kwargs):
+    def modify_setup(self,
+                     primary_pool=None,
+                     add_secondary_pools=None,
+                     remove_secondary_pools=None,
+                     server_name=None,
+                     workgroup=None,
+                     macos_optimized=None,
+                     default_home_quota=None):
         original_state = self._state.get_data_copy()
         config_needs_update = False
 
+        # Helper function for cleaner list handling
+        add_pools = add_secondary_pools or []
+        remove_pools = remove_secondary_pools or []
+
         try:
-            if 'primary_pool' in kwargs and kwargs['primary_pool'] is not None:
-                new_primary_pool = kwargs['primary_pool']
+            if primary_pool is not None:
                 old_primary_pool = self._state.get('primary_pool')
-                if new_primary_pool != old_primary_pool:
-                    if new_primary_pool not in self._zfs.list_pools():
-                        raise StateItemNotFoundError(
-                            "ZFS pool", new_primary_pool)
+                if primary_pool != old_primary_pool:
+                    if primary_pool not in self._zfs.list_pools():
+                        raise StateItemNotFoundError("ZFS pool", primary_pool)
+                    
+                    # Move user datasets
                     all_users = self._state.list_items("users")
                     for username, user_info in all_users.items():
                         self._zfs.move_dataset(
-                        user_info['dataset']['name'], new_primary_pool)
+                            user_info['dataset']['name'], primary_pool)
                         user_info['dataset']['name'] = user_info['dataset']['name'].replace(
-                            old_primary_pool, new_primary_pool, 1)
+                            old_primary_pool, primary_pool, 1)
                         user_info['dataset']['mount_point'] = self._zfs.get_mountpoint(
                             user_info['dataset']['name'])
-                        user_info['dataset']['pool'] = new_primary_pool
+                        user_info['dataset']['pool'] = primary_pool
                         self._state.set_item("users", username, user_info)
                     
-                    #TODO: We need to recursivly move all datasets (and create the full path)
+                    # Move shares that were on the old primary pool
                     all_shares = self._state.list_items("shares")
                     for share_name, share_info in all_shares.items():
                         if share_info['dataset']['pool'] == old_primary_pool:
                             old_dataset_name = share_info['dataset']['name']
                             dataset_path_in_pool = '/'.join(
                                 old_dataset_name.split('/')[1:])
-                            self._zfs.move_dataset(
-                                old_dataset_name, new_primary_pool)
-                            new_dataset_name = f"{new_primary_pool}/{dataset_path_in_pool}"
-                            share_info['dataset']['pool'] = new_primary_pool
+                            self._zfs.move_dataset(old_dataset_name, primary_pool)
+                            new_dataset_name = f"{primary_pool}/{dataset_path_in_pool}"
+                            share_info['dataset']['pool'] = primary_pool
                             share_info['dataset']['name'] = new_dataset_name
                             share_info['dataset']['mount_point'] = self._zfs.get_mountpoint(
                                 new_dataset_name)
-                            self._state.set_item(
-                                "shares", share_name, share_info)
+                            self._state.set_item("shares", share_name, share_info)
 
-                    self._state.set('primary_pool', new_primary_pool)
+                    self._state.set('primary_pool', primary_pool)
                     config_needs_update = True
 
-            if 'add_secondary_pools' in kwargs and kwargs['add_secondary_pools']:
+            if add_pools:
                 current_pools = set(self._state.get('secondary_pools', []))
-                for pool in kwargs['add_secondary_pools']:
+                for pool in add_pools:
                     if pool not in self._zfs.list_pools():
                         raise StateItemNotFoundError("ZFS pool", pool)
                     current_pools.add(pool)
                 self._state.set('secondary_pools', sorted(list(current_pools)))
 
-            if 'remove_secondary_pools' in kwargs and kwargs['remove_secondary_pools']:
-                pools_to_remove = set(kwargs['remove_secondary_pools'])
+            if remove_pools:
+                pools_to_remove = set(remove_pools)
                 all_shares = self._state.list_items("shares")
                 for share_name, share_info in all_shares.items():
                     if share_info['dataset']['pool'] in pools_to_remove:
@@ -654,26 +663,31 @@ class SmbZfsManager:
                 current_pools -= pools_to_remove
                 self._state.set('secondary_pools', sorted(list(current_pools)))
 
-            for key in ['server_name', 'workgroup', 'macos_optimized', 'default_home_quota']:
-                if key in kwargs and kwargs[key] is not None:
-                    value = kwargs[key]
-                    if key == 'default_home_quota' and value.lower() == 'none':
+            # Process simple key-value updates
+            simple_updates = {
+                'server_name': server_name,
+                'workgroup': workgroup,
+                'macos_optimized': macos_optimized,
+                'default_home_quota': default_home_quota
+            }
+            for key, value in simple_updates.items():
+                if value is not None:
+                    if key == 'default_home_quota' and str(value).lower() == 'none':
                         value = 'none'
                     self._state.set(key, value)
                     config_needs_update = True
 
             if config_needs_update:
-                primary_pool = self._state.get("primary_pool")
-                server_name = self._state.get("server_name")
-                workgroup = self._state.get("workgroup")
-                macos_optimized = self._state.get("macos_optimized")
                 self._config.create_smb_conf(
-                    primary_pool, server_name, workgroup, macos_optimized)
-
+                    self._state.get("primary_pool"),
+                    self._state.get("server_name"),
+                    self._state.get("workgroup"),
+                    self._state.get("macos_optimized")
+                )
                 all_shares = self.list_items("shares")
                 for share_name, share_info in all_shares.items():
                     self._config.add_share_to_conf(share_name, share_info)
-
+                
                 self._system.test_samba_config()
                 self._system.reload_samba()
 

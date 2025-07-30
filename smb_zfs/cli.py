@@ -198,41 +198,51 @@ def cmd_modify_share(manager, args):
     result = manager.modify_share(args.share, **kwargs)
     _handle_output(result, args)
 
-
 @handle_exception
 def cmd_modify_setup(manager, args):
     """Handler for the 'modify setup' command."""
-    kwargs = {}
-    if args.server_name is not None:
-        kwargs['server_name'] = args.server_name
-    if args.workgroup is not None:
-        kwargs['workgroup'] = args.workgroup
-    if args.macos is not None:
-        kwargs['macos_optimized'] = args.macos
-    if args.default_home_quota is not None:
-        kwargs['default_home_quota'] = args.default_home_quota
-    if args.primary_pool is not None:
-        kwargs['primary_pool'] = args.primary_pool
-    if args.add_secondary_pools is not None:
-        kwargs['add_secondary_pools'] = args.add_secondary_pools
-    if args.remove_secondary_pools is not None:
-        kwargs['remove_secondary_pools'] = args.remove_secondary_pools
+    # Convert comma-separated strings to lists if necessary
+    add_pools = args.add_secondary_pools
+    remove_pools = args.remove_secondary_pools
 
-    if not kwargs:
+    # Check if any modification was requested
+    modifications = {
+        "server_name": args.server_name,
+        "workgroup": args.workgroup,
+        "macos_optimized": args.macos,
+        "default_home_quota": args.default_home_quota,
+        "primary_pool": args.primary_pool,
+        "add_secondary_pools": add_pools,
+        "remove_secondary_pools": remove_pools
+    }
+    
+    # Filter out any keys where the value is None
+    active_modifications = {k: v for k, v in modifications.items() if v is not None}
+
+    if not active_modifications:
         print("No modifications specified. Use --help to see options.", file=sys.stderr)
         return
 
     if args.dry_run:
         print("--- Dry Run ---")
         print("Would modify global setup with the following changes:")
-        for key, value in kwargs.items():
-            print(f"  - Set {key} to: {value}")
+        for key, value in active_modifications.items():
+            # Use the original arg name for display
+            display_key = 'macos' if key == 'macos_optimized' else key
+            print(f"  - Set {display_key} to: {value}")
         return
 
     check_root()
-    result = manager.modify_setup(**kwargs)
+    result = manager.modify_setup(
+        server_name=args.server_name,
+        workgroup=args.workgroup,
+        macos_optimized=args.macos,
+        default_home_quota=args.default_home_quota,
+        primary_pool=args.primary_pool,
+        add_secondary_pools=add_pools,
+        remove_secondary_pools=remove_pools
+    )
     _handle_output(result, args)
-
 
 @handle_exception
 def cmd_modify_home(manager, args):
