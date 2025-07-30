@@ -32,7 +32,7 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     stream=sys.stdout
 )
-logger = logging.getLogger(NAME)
+logger = logging.getLogger(__name__)
 
 
 # --- Decorators ---
