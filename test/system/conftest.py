@@ -43,7 +43,18 @@ def run_smb_zfs_command(command, user_inputs=None):
     return format_text_output(stdout)
 
 
+def check_wizard_output(result: str, expected_success_msg: str) -> None:
+    """Checks the text output from a wizard session for a final success message."""
+    assert isinstance(
+        result, str), f"Expected text output from wizard, but got {type(result)}"
+    # The final line of a successful wizard operation should contain the success message.
+    last_line = result.strip().split('\n')[-1]
+    assert f"Success: {expected_success_msg}" in last_line, \
+        f"Wizard output did not contain the expected success message.\nOutput:\n{result}"
+
+
 def check_smb_zfs_result(result, asserted_msg, json=False, is_error=False):
+    """Checks the text output from a cli session."""
     assert asserted_msg
     if is_error:
         assert type(result) == str

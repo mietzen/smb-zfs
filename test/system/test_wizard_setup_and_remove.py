@@ -5,21 +5,10 @@ from conftest import (
     get_system_user_details,
     get_zfs_dataset_exists,
     get_zfs_property,
-    read_smb_conf
+    read_smb_conf,
+    check_wizard_output
 )
 from smb_zfs.config_generator import MACOS_SETTINGS
-
-
-def check_wizard_output(result: str, expected_success_msg: str) -> None:
-    """
-    Checks the text output from a wizard session for a final success message.
-    """
-    assert isinstance(
-        result, str), f"Expected text output from wizard, but got {type(result)}"
-    # The final line of a successful wizard operation should contain the success message.
-    last_line = result.strip().split('\n')[-1]
-    assert f"Success: {expected_success_msg}" in last_line, \
-        f"Wizard output did not contain the expected success message.\nOutput:\n{result}"
 
 
 def test_wizard_create_user_basic(initial_state) -> None:
