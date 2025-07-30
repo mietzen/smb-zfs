@@ -2,39 +2,19 @@ import re
 import os
 import sys
 import getpass
+from typing import Dict, Callable, Any
 
 from .const import CONFIRM_PHRASE
 from .errors import SmbZfsError
 
 
-def password_check(password):
-    """
-    Verify the strength of 'password'
-    Returns a dict indicating the wrong criteria
-    A password is considered strong if:
-        8 characters length or more
-        1 digit or more
-        1 symbol or more
-        1 uppercase letter or more
-        1 lowercase letter or more
-    """
-
-    # calculating the length
+def password_check(password: str) -> Dict[str, bool]:
+    """Verifies the strength of a password against a set of criteria."""
     length_error = len(password) < 8
-
-    # searching for digits
     digit_error = re.search(r"\d", password) is None
-
-    # searching for uppercase
     uppercase_error = re.search(r"[A-Z]", password) is None
-
-    # searching for lowercase
     lowercase_error = re.search(r"[a-z]", password) is None
-
-    # searching for symbols
     symbol_error = re.search(r"\W", password) is None
-
-    # overall result
     password_ok = not (
         length_error or digit_error or uppercase_error or lowercase_error or symbol_error)
 
@@ -48,8 +28,8 @@ def password_check(password):
     }
 
 
-def prompt_for_password(username):
-    """Securely prompts for a password, checks strength, and confirms."""
+def prompt_for_password(username: str) -> str:
+    """Securely prompts for a password, checks its strength, and confirms it."""
     while True:
         password = getpass.getpass(f"Enter password for user '{username}': ")
         if not password:
@@ -79,8 +59,8 @@ def prompt_for_password(username):
         print("Passwords do not match. Please try again.", file=sys.stderr)
 
 
-def confirm_destructive_action(prompt, yes_flag):
-    """Ask for confirmation for a destructive action."""
+def confirm_destructive_action(prompt: str, yes_flag: bool) -> bool:
+    """Asks for confirmation for a destructive action unless a 'yes' flag is provided."""
     if yes_flag:
         return True
     print(f"WARNING: {prompt}", file=sys.stderr)
@@ -92,19 +72,18 @@ def confirm_destructive_action(prompt, yes_flag):
     return response == CONFIRM_PHRASE
 
 
-def handle_exception(func):
-    """Decorator to catch and print SmbZfsError exceptions."""
-
-    def wrapper(*args, **kwargs):
+def handle_exception(func: Callable[..., Any]) -> Callable[..., Any]:
+    """A decorator to catch and print SmbZfsError exceptions, then exit."""
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
         try:
             return func(*args, **kwargs)
         except SmbZfsError as e:
             print(f"Error: {e}", file=sys.stderr)
             sys.exit(1)
-
     return wrapper
 
 
-def check_root():
+def check_root() -> None:
+    """Checks if the script is being run by the root user."""
     if os.geteuid() != 0:
         raise SmbZfsError("This script must be run as root.")
