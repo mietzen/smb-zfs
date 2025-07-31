@@ -26,7 +26,7 @@ jobs:
     runs-on: ubuntu-24.04
     container: debian:12
     permissions:
-        id-token: write
+      contents: write
     steps:
     - name: Install GIT & GH-CLI
       run: |
@@ -56,6 +56,8 @@ jobs:
       run: |
         ADDRESS="${GITHUB_ACTOR_ID}+${GITHUB_ACTOR}@users.noreply.github.com"
         NAME="$(gh api /users/${GITHUB_ACTOR} | jq .name -r)"
+        git config --global user.email "${ADDRESS}"
+        git config --global user.name "${NAME}"
         export EMAIL="${NAME} <${ADDRESS}>"
         gbp dch --new-version="${GIT_TAG}-1" --release --debian-tag="${GIT_TAG}" --spawn-editor=/bin/true --ignore-branch
     - name: Create Package
@@ -69,3 +71,13 @@ jobs:
         GIT_TAG: ${{ github.event.release.tag_name }}
       run: |
         gh release upload "${GIT_TAG}" "../python3-smb-zfs_${GIT_TAG}-1_all.deb" --clobber
+    - name: Push Changelog
+      working-directory: src
+      env:
+        GIT_TAG: ${{ github.event.release.tag_name }}
+      run: |
+        git switch main
+        git add debian/changelog
+        git commit -m '${GIT_TAG} Changelog'
+        git pull -r
+        git push
