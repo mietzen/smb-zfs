@@ -28,24 +28,20 @@ jobs:
     permissions:
       contents: write
     steps:
-    - name: Install GIT & GH-CLI
+    - name: Install workflow dependencies
       run: |
         apt-get update
-        apt-get install jq git -y
-        (type -p wget >/dev/null || (apt-get update && apt-get install wget -y)) \
-          && mkdir -p -m 755 /etc/apt/keyrings \
-          && out=$(mktemp) && wget -nv -O$out https://cli.github.com/packages/githubcli-archive-keyring.gpg \
-          && cat $out | tee /etc/apt/keyrings/githubcli-archive-keyring.gpg > /dev/null \
-          && chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg \
-          && mkdir -p -m 755 /etc/apt/sources.list.d \
-          && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
-          && apt-get update \
-          && apt-get install gh -y
+        apt-get install -y curl git jq
+        # Install latest GitHub CLI
+        URL=$(curl -s https://api.github.com/repos/cli/cli/releases/latest \
+            | jq -r '.assets[] | select(.name | test("linux_amd64\\.deb$")) | .browser_download_url')
+        curl -sL "$URL" -o gh_latest_linux_amd64.deb
+        apt install -y ./gh_latest_linux_amd64.deb
     - uses: actions/checkout@v4
       with:
         path: src
         fetch-depth: 0
-    - name: Install dependencies
+    - name: Install build dependencies
       working-directory: src
       run: |
         apt-get build-dep . -y
@@ -55,31 +51,43 @@ jobs:
         GIT_TAG: ${{ github.event.release.tag_name }}
         GH_TOKEN: ${{ github.token }}
       run: |
-        # Ugly Hack to create a changelog
-        ADDRESS="${GITHUB_ACTOR_ID}+${GITHUB_ACTOR}@users.noreply.github.com"
+        EMAIL="${GITHUB_ACTOR_ID}+${GITHUB_ACTOR}@users.noreply.github.com"
         NAME="$(gh api /users/${GITHUB_ACTOR} | jq .name -r)"
-        git config --global user.email "${ADDRESS}"
-        git config --global user.name "${NAME}"
-        export EMAIL="${NAME} <${ADDRESS}>"
-        gbp dch --new-version="${GIT_TAG}-1" --debian-tag="${GIT_TAG}" --spawn-editor=/bin/true --ignore-branch
-        sed -i -E "s/^(smb-zfs \([^)]+\)) UNRELEASED; urgency=medium/\1 stable; urgency=medium/" debian/changelog
-        sed -i "s/^  \* UNRELEASED/  * Release ${GIT_TAG}: https:\/\/github.com\/mietzen\/smb-zfs\/releases\/tag\/${GIT_TAG}/" debian/changelog
+        DATE="$(date -u '+%a, %d %b %Y %H:%M:%S +0000')"
+
+        # Create new changelog entry and prepend it to debian/changelog
+        {
+          cat <<EOF
+        smb-zfs (${GIT_TAG}-1) stable; urgency=medium
+
+          * Release ${GIT_TAG}: https://github.com/${GITHUB_ACTOR}/smb-zfs/releases/tag/${GIT_TAG}
+
+        -- ${NAME} <${EMAIL}>  ${DATE}
+
+        EOF
+          cat debian/changelog
+        } > debian/changelog.new && mv debian/changelog.new debian/changelog
     - name: Create Package
       working-directory: src
       run: |
         dpkg-buildpackage -us -uc
-    - name: Upload binary to release
+    - name: Attach debian package to release
       working-directory: src
       env:
         GH_TOKEN: ${{ github.token }}
         GIT_TAG: ${{ github.event.release.tag_name }}
       run: |
         gh release upload "${GIT_TAG}" "../python3-smb-zfs_${GIT_TAG}-1_all.deb" --clobber
-    - name: Push Changelog
+    - name: Push release changelog to main
       working-directory: src
       env:
+        GH_TOKEN: ${{ github.token }}
         GIT_TAG: ${{ github.event.release.tag_name }}
       run: |
+        # Configure git
+        git config --global user.email "${GITHUB_ACTOR_ID}+${GITHUB_ACTOR}@users.noreply.github.com"
+        git config --global user.name "$(gh api /users/${GITHUB_ACTOR} | jq .name -r)"
+
         git switch main
         git add debian/changelog
         git commit -m "Changelog release ${GIT_TAG}"
