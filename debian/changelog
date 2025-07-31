@@ -6,36 +6,12 @@ smb-zfs (0.7.2-1) stable; urgency=medium
 
 smb-zfs (0.7.1-1) stable; urgency=medium
 
-  * Release 0.7.1
+  * Release 0.7.1: https://github.com/mietzen/smb-zfs/releases/tag/0.7.1
 
  -- Nils <31704359+mietzen@users.noreply.github.com>  Thu, 31 Jul 2025 13:36:20 +0000
 
 smb-zfs (0.7.0-1) stable; urgency=medium
 
-  * Release 0.7.0
+  * Release 0.7.0: https://github.com/mietzen/smb-zfs/releases/tag/0.7.0
 
  -- Nils <31704359+mietzen@users.noreply.github.com>  Thu, 31 Jul 2025 13:33:21 +0000
-
-smb-zfs (0.6.18-1) stable; urgency=medium
-
-  * Release 0.6.18
-
- -- Nils <31704359+mietzen@users.noreply.github.com>  Thu, 31 Jul 2025 13:29:50 +0000
-
-smb-zfs (0.6.17-1) stable; urgency=medium
-
-  * Release 0.6.17
-
- -- Nils <31704359+mietzen@users.noreply.github.com>  Thu, 31 Jul 2025 13:18:00 +0000
-
-smb-zfs (0.6.16-1) stable; urgency=medium
-
-  * Release 0.6.16
-
- -- Nils <31704359+mietzen@users.noreply.github.com>  Thu, 31 Jul 2025 13:11:33 +0000
-
-smb-zfs (0.6.15-1) stable; urgency=medium
-
-  * Release 0.6.15
-
- -- Nils <31704359+mietzen@users.noreply.github.com>  Thu, 31 Jul 2025 13:05:11 +0000
