@@ -82,6 +82,6 @@ jobs:
       run: |
         git switch main
         git add debian/changelog
-        git commit -m "${GIT_TAG} Changelog"
+        git commit -m "Changelog release ${GIT_TAG}"
         git pull -r
         git push
