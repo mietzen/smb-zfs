@@ -756,7 +756,7 @@ class SmbZfsManager:
             for name, data in items.items():
                 if "dataset" in data and "name" in data["dataset"]:
                     quota = self._zfs.get_quota(data["dataset"]["name"])
-                    data["dataset"]["quota"] = quota if quota and quota != 'none' else "Not Set"
+                    data["dataset"]["quota"] = quota if quota and quota != 'none' else "none"
         return items
 
     def remove(self, delete_data: bool = False, delete_users_and_groups: bool = False) -> Dict[str, Any]:

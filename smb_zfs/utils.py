@@ -33,16 +33,16 @@ def prompt_for_password(username: str) -> str:
     while True:
         password = getpass.getpass(f"Enter password for user '{username}': ")
         if not password:
-            print("Password cannot be empty.", file=sys.stderr)
+            print("Password cannot be empty.")
             continue
 
         check = password_check(password)
         if not check['password_ok']:
-            print("Password is not strong enough:", file=sys.stderr)
+            print("Password is not strong enough:")
             if check['length_error']:
-                print("- It must be at least 8 characters long.", file=sys.stderr)
+                print("- It must be at least 8 characters long.")
             if check['digit_error']:
-                print("- It must contain at least one digit.", file=sys.stderr)
+                print("- It must contain at least one digit.")
             if check['uppercase_error']:
                 print("- It must contain at least one uppercase letter.",
                       file=sys.stderr)
@@ -50,23 +50,22 @@ def prompt_for_password(username: str) -> str:
                 print("- It must contain at least one lowercase letter.",
                       file=sys.stderr)
             if check['symbol_error']:
-                print("- It must contain at least one symbol.", file=sys.stderr)
+                print("- It must contain at least one symbol.")
             continue
 
         password_confirm = getpass.getpass("Confirm password: ")
         if password == password_confirm:
             return password
-        print("Passwords do not match. Please try again.", file=sys.stderr)
+        print("Passwords do not match. Please try again.")
 
 
 def confirm_destructive_action(prompt: str, yes_flag: bool) -> bool:
     """Asks for confirmation for a destructive action unless a 'yes' flag is provided."""
     if yes_flag:
         return True
-    print(f"WARNING: {prompt}", file=sys.stderr)
+    print(f"WARNING: {prompt}")
     print(
         f"To proceed, type the following phrase exactly: {CONFIRM_PHRASE}",
-        file=sys.stderr,
     )
     response = input("> ")
     return response == CONFIRM_PHRASE

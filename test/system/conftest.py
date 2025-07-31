@@ -12,30 +12,37 @@ from smb_zfs.smb_zfs import STATE_FILE, SMB_CONF
 from unittest.mock import patch
 from contextlib import redirect_stdout, redirect_stderr
 from smb_zfs.errors import SmbZfsError
+from collections import deque
 
 def run_smb_zfs_command(command, user_inputs=None):
     """Helper function to run smb-zfs commands with optional user input."""
     is_json_output = "--json" in command or command.strip().startswith("get-state")
-
     stdout_buffer = io.StringIO()
     stderr_buffer = io.StringIO()
-
-    input_side_effect = user_inputs if isinstance(user_inputs, list) else [user_inputs] if user_inputs else []
-
+    
+    # Use deque for efficient popping from left
+    input_queue = deque(user_inputs if isinstance(user_inputs, list) else [user_inputs] if user_inputs else [])
+    
+    def pop_input(*args, **kwargs):
+        try:
+            return input_queue.popleft()
+        except IndexError:
+            return iter([])
+    
     with redirect_stdout(stdout_buffer), redirect_stderr(stderr_buffer):
-        input_patch = patch("builtins.input", side_effect=input_side_effect)
-        getpass_patch = patch("getpass.getpass", side_effect=input_side_effect)
+        input_patch = patch("builtins.input", side_effect=pop_input)
+        getpass_patch = patch("getpass.getpass", side_effect=pop_input)
         argv_patch = patch("sys.argv", ['smb-zfs'] + shlex.split(command))
-
+        
         with argv_patch, input_patch, getpass_patch:
             try:
                 cli()
             except SystemExit:
                 pass
-
+    
     stdout = stdout_buffer.getvalue()
     stderr = stderr_buffer.getvalue()
-
+    
     if stderr:
         return format_text_output(f'{stdout}\n\n{stderr}')
     if is_json_output:

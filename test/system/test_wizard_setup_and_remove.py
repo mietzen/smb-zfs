@@ -9,6 +9,7 @@ from conftest import (
     check_wizard_output
 )
 from smb_zfs.config_generator import MACOS_SETTINGS
+from smb_zfs.const import CONFIRM_PHRASE
 
 
 def test_wizard_create_user_basic(initial_state) -> None:
@@ -16,8 +17,8 @@ def test_wizard_create_user_basic(initial_state) -> None:
     cmd = "wizard create user"
     inputs = [
         "sztest_w_user1",      # Username
-        "SecretPassword!",     # Password
-        "SecretPassword!",     # Confirm Password
+        "SecretPassword1!",     # Password
+        "SecretPassword1!",     # Confirm Password
         "n",                   # No shell access
         "y",                   # Create home directory
         ""                     # No additional groups
@@ -45,7 +46,7 @@ def test_wizard_delete_user_with_data(initial_state) -> None:
     inputs = [
         "sztest_w_todelete",   # Username to delete
         "y",                   # Yes, delete data
-        "Yes, I am sure."      # Confirmation phrase
+        f"{CONFIRM_PHRASE}"      # Confirmation phrase
     ]
     result = run_smb_zfs_command(cmd, user_inputs=inputs)
     check_wizard_output(
@@ -245,7 +246,7 @@ def test_wizard_remove_complete(initial_state) -> None:
     inputs = [
         "y",                   # Delete ZFS datasets?
         "y",                   # Delete users and groups?
-        "Yes, I am sure."      # Confirmation phrase
+        f"{CONFIRM_PHRASE}"      # Confirmation phrase
     ]
     result = run_smb_zfs_command(cmd, user_inputs=inputs)
     check_wizard_output(result, "Removal completed successfully.")
