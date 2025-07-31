@@ -43,7 +43,6 @@ jobs:
         gbp dch --new-version="${GIT_TAG}-1" --release --debian-tag="${GIT_TAG}" --spawn-editor=/bin/true --ignore-branch --git-author
     - name: Create Package
       working-directory: ./src
-      env:
       run: |
         dpkg-buildpackage -us -uc
     - name: Upload binary to release
