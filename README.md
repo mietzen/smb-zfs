@@ -4,28 +4,31 @@ A command-line tool for simplifying Samba share management on ZFS-backed systems
 
 `smb-zfs` automates the setup and administration of users, groups, and shares, ensuring Samba and ZFS configurations remain synchronized.
 
-It provides a reliable interface for common administrative tasks through two modes: a standard CLI `smb-zfs` for scripting and an interactive wizard `smb-zfs-wizard` for guided setup.
+It provides a reliable interface for common administrative tasks through two modes: a standard CLI `smb-zfs` for scripting and an interactive wizard `smb-zfs wizard` for guided setup.
 
 ```text
 $ smb-zfs -h
-usage: smb-zfs [-h] [-v] {setup,create,modify,delete,list,passwd,remove} ...
+usage: smb-zfs [-h] [--version] [-v] {wizard,setup,create,modify,delete,list,passwd,remove,get-state} ...
 
 A tool to manage Samba on a ZFS-backed system.
 
 positional arguments:
-  {setup,create,modify,delete,list,passwd,remove}
+  {wizard,setup,create,modify,delete,list,passwd,remove,get-state}
                         Available commands
+    wizard              Start an interactive wizard for common tasks.
     setup               Set up and configure Samba, ZFS, and Avahi.
     create              Create a new user, share, or group.
     modify              Modify an existing user, share, or group.
     delete              Delete a user, share, or group.
-    list                List all managed users, shares, or groups.
+    list                List all managed users, shares, groups or pools.
     passwd              Change a user's Samba password.
     remove              Uninstall smb-zfs and remove all related configurations and data.
+    get-state           Print the current state as JSON.
 
 options:
   -h, --help            show this help message and exit
-  -v, --version         show program's version number and exit
+  --version             show program's version number and exit
+  -v, --verbose         Increase verbosity level (-v for warning, -vv for info, -vvv for debug).
 ```
 
 ## Prerequisites
@@ -50,40 +53,42 @@ echo PIPX_BIN_DIR=/usr/local/bin >> ~/.bashrc
 Install `bash` completion:
 
 ```Shell
-wget "https://raw.githubusercontent.com/mietzen/smb-zfs/refs/tags/$(smb-zfs -v)/completion/smb-zfs-wizard-completion.sh" -O /etc/bash_completion.d/smb-zfs-wizard-completion.sh
 wget "https://raw.githubusercontent.com/mietzen/smb-zfs/refs/tags/$(smb-zfs -v)/completion/smb-zfs-completion.sh" -O /etc/bash_completion.d/smb-zfs-completion.sh
 ```
 
-This makes the `smb-zfs` and `smb-zfs-wizard` commands available system-wide.
+This makes the `smb-zfs` command available system-wide.
 
 ## Quick Start: Use the Wizard for Guided Setup
 
 ```shell
 $ smb-zfs --help
-usage: smb-zfs [-h] [-v] {setup,create,modify,delete,list,passwd,remove} ...
+usage: smb-zfs [-h] [--version] [-v] {wizard,setup,create,modify,delete,list,passwd,remove,get-state} ...
 
 A tool to manage Samba on a ZFS-backed system.
 
 positional arguments:
-  {setup,create,modify,delete,list,passwd,remove}
+  {wizard,setup,create,modify,delete,list,passwd,remove,get-state}
                         Available commands
-    setup               Initial setup of Samba, ZFS, and Avahi.
+    wizard              Start an interactive wizard for common tasks.
+    setup               Set up and configure Samba, ZFS, and Avahi.
     create              Create a new user, share, or group.
     modify              Modify an existing user, share, or group.
-    delete              Remove a user, share, or group.
-    list                List all items of a specific type.
-    passwd              Change a user's password.
-    remove              Remove all configurations and data.
+    delete              Delete a user, share, or group.
+    list                List all managed users, shares, groups or pools.
+    passwd              Change a user's Samba password.
+    remove              Uninstall smb-zfs and remove all related configurations and data.
+    get-state           Print the current state as JSON.
 
 options:
   -h, --help            show this help message and exit
-  -v, --version         show program's version number and exit
+  --version             show program's version number and exit
+  -v, --verbose         Increase verbosity level (-v for warning, -vv for info, -vvv for debug).
 ```
 
 Example setup:
 
 ```shell
-$ smb-zfs-wizard setup
+$ smb-zfs wizard setup
 
 --- Initial System Setup Wizard ---
 Available ZFS pools: data, rpool, tank
@@ -105,7 +110,7 @@ Success: Setup completed successfully.
 ```
 
 ```shell
-$ smb-zfs-wizard create user
+$ smb-zfs wizard create user
 
 --- Create New User Wizard ---
 Enter the new username: nils
@@ -119,7 +124,7 @@ Success: User 'nils' created successfully.
 ```
 
 ```shell
-$ smb-zfs-wizard create share
+$ smb-zfs wizard create share
 
 --- Create New Share Wizard ---
 Enter the name for the new share: media
@@ -176,7 +181,7 @@ pipx upgrade smb-zfs
 ## Uninstallation
 
 ```shell
-sudo smb-zfs-wizard remove
+sudo smb-zfs wizard remove
 sudo pipx remove smb-zfs
 
 # Remove apt pkgs
