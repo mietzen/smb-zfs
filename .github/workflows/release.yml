@@ -60,7 +60,9 @@ jobs:
         git config --global user.email "${ADDRESS}"
         git config --global user.name "${NAME}"
         export EMAIL="${NAME} <${ADDRESS}>"
-        gbp dch --new-version="${GIT_TAG}-1" --debian-tag="${GIT_TAG}" --spawn-editor=/bin/true --ignore-branch --commit-msg="Release: ${GIT_TAG}"
+        gbp dch --new-version="${GIT_TAG}-1" --debian-tag="${GIT_TAG}" --spawn-editor=/bin/true --ignore-branch
+        sed -i -E "s/^(smb-zfs \([^)]+\)) UNRELEASED; urgency=medium/\1 stable; urgency=medium/" debian/changelog
+        sed -i "s/^  \* UNRELEASED/  * Release ${GIT_TAG}/" debian/changelog
     - name: Create Package
       working-directory: src
       run: |

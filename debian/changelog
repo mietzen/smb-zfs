@@ -1,6 +1,6 @@
-smb-zfs (0.6.16-1) UNRELEASED; urgency=medium
+smb-zfs (0.6.16-1) stable; urgency=medium
 
-  * UNRELEASED
+  * Release 0.6.16
 
  -- Nils <31704359+mietzen@users.noreply.github.com>  Thu, 31 Jul 2025 13:11:33 +0000
 
