@@ -62,7 +62,7 @@ jobs:
 
           * Release ${GIT_TAG}: https://github.com/${GITHUB_ACTOR}/smb-zfs/releases/tag/${GIT_TAG}
 
-        -- ${NAME} <${EMAIL}>  ${DATE}
+         -- ${NAME} <${EMAIL}>  ${DATE}
 
         EOF
           cat debian/changelog

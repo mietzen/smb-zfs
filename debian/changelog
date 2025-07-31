@@ -2,7 +2,7 @@ smb-zfs (0.7.3-1) stable; urgency=medium
 
   * Release 0.7.3: https://github.com/mietzen/smb-zfs/releases/tag/0.7.3
 
--- Nils <31704359+mietzen@users.noreply.github.com>  Thu, 31 Jul 2025 15:02:08 +0000
+ -- Nils <31704359+mietzen@users.noreply.github.com>  Thu, 31 Jul 2025 15:02:08 +0000
 
 smb-zfs (0.7.2-1) stable; urgency=medium
 
