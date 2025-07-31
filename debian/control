@@ -12,12 +12,17 @@ Build-Depends:
     python3-setuptools-scm
 Standards-Version: 4.6.2
 Homepage: https://github.com/mietzen/smb-zfs
-Vcs-Git: https://salsa.debian.org/debian/smb-zfs.git
-Vcs-Browser: https://salsa.debian.org/debian/smb-zfs
+Vcs-Git: https://github.com/mietzen/smb-zfs.git
+Vcs-Browser: https://github.com/mietzen/smb-zfs
 
 Package: python3-smb-zfs
 Architecture: all
-Depends: ${python3:Depends}, ${misc:Depends}
+Depends:
+    ${python3:Depends},
+    ${misc:Depends},
+    samba,
+    avahi-daemon,
+    zfsutils-linux
 Description: A command-line tool for simplifying Samba share management on ZFS-backed systems.
     smb-zfs automates the setup and administration of users, groups, and shares, ensuring Samba and ZFS configurations remain synchronized.
     It provides a reliable interface for common administrative tasks through two modes: a standard CLI smb-zfs for scripting and an interactive wizard smb-zfs wizard for guided setup.
