@@ -6,6 +6,7 @@ Build-Depends:
     debhelper-compat (= 13),
     dh-python,
     pybuild-plugin-pyproject,
+    git-buildpackage,
     python3-all,
     python3-setuptools,
     python3-setuptools-scm
@@ -17,6 +18,6 @@ Vcs-Browser: https://salsa.debian.org/debian/smb-zfs
 Package: python3-smb-zfs
 Architecture: all
 Depends: ${python3:Depends}, ${misc:Depends}
-Description: A tool to manage Samba on a ZFS-backed system.
- A longer description of your tool can go here. It will be shown
- by package managers like apt or dpkg.
+Description: A command-line tool for simplifying Samba share management on ZFS-backed systems.
+    smb-zfs automates the setup and administration of users, groups, and shares, ensuring Samba and ZFS configurations remain synchronized.
+    It provides a reliable interface for common administrative tasks through two modes: a standard CLI smb-zfs for scripting and an interactive wizard smb-zfs wizard for guided setup.

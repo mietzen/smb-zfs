@@ -5,7 +5,7 @@ on:
     types: [published]
 
 jobs:
-  Deploy:
+  Pypi:
     runs-on: ubuntu-24.04
     permissions:
         id-token: write
@@ -22,3 +22,39 @@ jobs:
       run: python -m build --wheel
     - name: Publish package
       uses: pypa/gh-action-pypi-publish@release/v1
+  deb:
+    runs-on: ubuntu-24.04
+    container: debian:12
+    permissions:
+        id-token: write
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        path: ./src
+    - name: Install dependencies
+      working-directory: ./src
+      run: |
+        apt-get build-dep . -y
+    - name: Update Changelog
+      working-directory: ./src
+      env:
+        GIT_TAG: ${{ github.event.release.tag_name }}
+      run: |
+        gbp dch --new-version="${GIT_TAG}-1" --release --debian-tag="${GIT_TAG}" --spawn-editor=/bin/true --ignore-branch --git-author
+    - name: Create Package
+      working-directory: ./src
+      env:
+      run: |
+        dpkg-buildpackage -us -uc
+    - name: Upload binary to release
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GIT_TAG: ${{ github.event.release.tag_name }}
+      run: |
+        FILES=(python3-smb-zfs_*_all.deb)
+        if [[ -f "${FILES[0]}" ]]; then
+          gh release upload "${GIT_TAG}" "${FILES[@]}" --clobber
+        else
+          echo "No matching .deb file found"
+          exit 1
+        fi
