@@ -1,11 +1,5 @@
 smb-zfs (0.6.15-1) stable; urgency=medium
 
-  * UNRELEASED
+  * Release 0.6.15
 
  -- Nils <31704359+mietzen@users.noreply.github.com>  Thu, 31 Jul 2025 13:05:11 +0000
-
-smb-zfs (0.1.0-1) stable; urgency=medium
-
-  * Initial release.
-
- -- Nils Stein <github.nstein@mailbox.org>  Thu, 31 Jul 2025 07:34:46 +0200

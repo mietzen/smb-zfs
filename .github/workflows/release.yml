@@ -60,7 +60,7 @@ jobs:
         git config --global user.email "${ADDRESS}"
         git config --global user.name "${NAME}"
         export EMAIL="${NAME} <${ADDRESS}>"
-        gbp dch --new-version="${GIT_TAG}-1" --release --debian-tag="${GIT_TAG}" --spawn-editor=/bin/true --ignore-branch
+        gbp dch --new-version="${GIT_TAG}-1" --debian-tag="${GIT_TAG}" --spawn-editor=/bin/true --ignore-branch --commit-msg="Release: ${GIT_TAG}"
     - name: Create Package
       working-directory: src
       run: |
@@ -79,6 +79,6 @@ jobs:
       run: |
         git switch main
         git add debian/changelog
-        git commit -m '${GIT_TAG} Changelog'
+        git commit -m "${GIT_TAG} Changelog"
         git pull -r
         git push
