@@ -39,7 +39,6 @@ jobs:
       working-directory: src
       run: |
         apt-get build-dep . -y
-    - uses: actions/checkout@v4
     - name: Update Changelog
       working-directory: src
       env:
