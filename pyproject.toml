@@ -19,7 +19,6 @@ Issues = "https://github.com/mietzen/smb-zfs/issues"
 
 [project.scripts]
 smb-zfs = "smb_zfs.cli:main"
-smb-zfs-wizard = "smb_zfs.smb_zfs_wizard:main"
 
 [build-system]
 requires = ["setuptools>=77.0", "setuptools-scm>=8"]
