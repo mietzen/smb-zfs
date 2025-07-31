@@ -29,7 +29,6 @@ jobs:
         id-token: write
     steps:
     - name: Install GIT
-      working-directory: src
       run: |
         apt-get update
         apt-get install git -y
