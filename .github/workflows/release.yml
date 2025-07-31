@@ -63,8 +63,9 @@ jobs:
       run: |
         dpkg-buildpackage -us -uc
     - name: Upload binary to release
+      working-directory: src
       env:
         GH_TOKEN: ${{ github.token }}
         GIT_TAG: ${{ github.event.release.tag_name }}
       run: |
-        gh release upload "${GIT_TAG}" "python3-smb-zfs_${GIT_TAG}-1_all.deb" --clobber
+        gh release upload "${GIT_TAG}" "../python3-smb-zfs_${GIT_TAG}-1_all.deb" --clobber
