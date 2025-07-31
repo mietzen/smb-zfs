@@ -34,6 +34,7 @@ jobs:
     - name: Install dependencies
       working-directory: ./src
       run: |
+        apt-get update
         apt-get build-dep . -y
     - name: Update Changelog
       working-directory: ./src
