@@ -67,10 +67,4 @@ jobs:
         GH_TOKEN: ${{ github.token }}
         GIT_TAG: ${{ github.event.release.tag_name }}
       run: |
-        FILE=$(ls python3-smb-zfs_*_all.deb)
-        if [[ -f "${FILE}" ]]; then
-          gh release upload "${GIT_TAG}" "${FILE}" --clobber
-        else
-          echo "No matching .deb file found"
-          exit 1
-        fi
+        gh release upload "${GIT_TAG}" "python3-smb-zfs_${GIT_TAG}-1_all.deb" --clobber
