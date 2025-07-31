@@ -1,0 +1,22 @@
+Source: smb-zfs
+Section: python
+Priority: optional
+Maintainer: Nils Stein <github.nstein@mailbox.org>
+Build-Depends:
+    debhelper-compat (= 13),
+    dh-python,
+    pybuild-plugin-pyproject,
+    python3-all,
+    python3-setuptools,
+    python3-setuptools-scm
+Standards-Version: 4.6.2
+Homepage: https://github.com/mietzen/smb-zfs
+Vcs-Git: https://salsa.debian.org/debian/smb-zfs.git
+Vcs-Browser: https://salsa.debian.org/debian/smb-zfs
+
+Package: python3-smb-zfs
+Architecture: all
+Depends: ${python3:Depends}, ${misc:Depends}
+Description: A tool to manage Samba on a ZFS-backed system.
+ A longer description of your tool can go here. It will be shown
+ by package managers like apt or dpkg.
