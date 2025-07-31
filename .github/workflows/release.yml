@@ -40,7 +40,10 @@ jobs:
       working-directory: ./src
       env:
         GIT_TAG: ${{ github.event.release.tag_name }}
+        GH_TOKEN: ${{ github.token }}
       run: |
+        git config --global user.email "${GITHUB_ACTOR_ID}+${GITHUB_ACTOR}@users.noreply.github.com"
+        git config --global user.name "$(gh api /users/${GITHUB_ACTOR} | jq .name -r)"
         gbp dch --new-version="${GIT_TAG}-1" --release --debian-tag="${GIT_TAG}" --spawn-editor=/bin/true --ignore-branch --git-author
     - name: Create Package
       working-directory: ./src
@@ -48,7 +51,7 @@ jobs:
         dpkg-buildpackage -us -uc
     - name: Upload binary to release
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GH_TOKEN: ${{ github.token }}
         GIT_TAG: ${{ github.event.release.tag_name }}
       run: |
         FILES=(python3-smb-zfs_*_all.deb)
