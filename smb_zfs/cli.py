@@ -291,7 +291,7 @@ def cmd_delete_share(manager: SmbZfsManager, args: argparse.Namespace) -> None:
         print("Would perform the following actions:")
         print(f"  - Remove share '{args.share}' from {SMB_CONF}")
         if args.delete_data:
-            share_info = manager._state.get_item('shares', args.share)
+            share_info = manager._state.get_item('shares', args.share)['smb']
             if share_info and 'dataset' in share_info:
                 print(
                     f"  - DESTROY ZFS dataset: {share_info['dataset']['name']}"
@@ -399,7 +399,7 @@ def cmd_remove(manager: SmbZfsManager, args: argparse.Namespace) -> None:
             for user_info in users.values():
                 if "dataset" in user_info:
                     print(f"    - {user_info['dataset']['name']}")
-            pool = manager._state.get("primary_pool")
+            pool = manager._state.get("config").get("smb").get("primary_pool")
             if pool:
                 print(f"    - {pool}/homes")
         print("  - Stop and disable smbd, nmbd, avahi-daemon services.")

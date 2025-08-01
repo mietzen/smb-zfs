@@ -15,8 +15,8 @@ def test_initial_setup_state(initial_state) -> None:
     assert initial_state['primary_pool'] == 'primary_testpool'
     assert 'secondary_testpool' in initial_state['secondary_pools']
     assert 'tertiary_testpool' in initial_state['secondary_pools']
-    assert initial_state['workgroup'] == 'TESTGROUP'
-    assert initial_state['server_name'] == 'TESTSERVER'
+    assert initial_state['config']['smb']['workgroup'] == 'TESTGROUP'
+    assert initial_state['config']['smb']['server_name'] == 'TESTSERVER'
 
     # Check ZFS datasets exist
     assert get_zfs_dataset_exists('primary_testpool/homes')
@@ -42,10 +42,10 @@ def test_setup_with_options() -> None:
 
     # Check state
     state = run_smb_zfs_command("get-state")
-    assert state['workgroup'] == 'MACGROUP'
-    assert state['server_name'] == 'MACSERVER'
-    assert state['macos_optimized'] == True
-    assert state['default_home_quota'] == '20G'
+    assert state['config']['smb']['workgroup'] == 'MACGROUP'
+    assert state['config']['smb']['server_name'] == 'MACSERVER'
+    assert state['config']['smb']['macos_optimized'] == True
+    assert state['config']['smb']['default_home_quota'] == '20G'
     assert state['primary_pool'] == 'primary_testpool'
     assert 'secondary_testpool' in state['secondary_pools']
 
@@ -88,8 +88,8 @@ def test_modify_setup_change_server_settings(initial_state) -> None:
 
     # Check state
     final_state = run_smb_zfs_command("get-state")
-    assert final_state['workgroup'] == 'NEWGROUP'
-    assert final_state['server_name'] == 'NEWSERVER'
+    assert final_state['config']['smb']['workgroup'] == 'NEWGROUP'
+    assert final_state['config']['smb']['server_name'] == 'NEWSERVER'
 
     # Check smb.conf
     smb_conf_content = read_smb_conf()
@@ -145,7 +145,7 @@ def test_modify_setup_macos_toggle(initial_state) -> None:
 
     # Check state
     state1 = run_smb_zfs_command("get-state")
-    assert state1['macos_optimized'] == True
+    assert state1['config']['smb']['macos_optimized'] == True
 
     # Check smb.conf
     smb_conf1 = read_smb_conf()
@@ -161,7 +161,7 @@ def test_modify_setup_macos_toggle(initial_state) -> None:
 
     # Check state
     state2 = run_smb_zfs_command("get-state")
-    assert state2['macos_optimized'] == False
+    assert state2['config']['smb']['macos_optimized'] == False
 
     # Check smb.conf
     smb_conf2 = read_smb_conf()
@@ -179,7 +179,7 @@ def test_modify_setup_default_home_quota(initial_state) -> None:
 
     # Check state
     final_state = run_smb_zfs_command("get-state")
-    assert final_state['default_home_quota'] == '50G'
+    assert final_state['config']['smb']['default_home_quota'] == '50G'
 
     # New users should get the default quota
     cmd2 = "create user sztest_quotauser --password 'TestPassword!' --json"

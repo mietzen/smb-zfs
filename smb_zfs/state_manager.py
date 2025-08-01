@@ -28,14 +28,20 @@ class StateManager:
         logger.debug("Creating initial state structure in memory.")
         initial_state = {
             "initialized": False,
-            "primary_pool": None,
-            "secondary_pools": [],
-            "server_name": None,
-            "workgroup": None,
-            "macos_optimized": False,
-            "default_home_quota": None,
+            "config": {
+                "primary_pool": None,
+                "secondary_pools": [],
+                "smb": {
+                    "server_name": None,
+                    "workgroup": None,
+                    "macos_optimized": False,
+                    "default_home_quota": None,
+                },
+            },
             "users": {},
-            "shares": {},
+            "shares": {
+                "smb": {},
+                },
             "groups": {},
         }
         try:

@@ -184,8 +184,8 @@ def test_create_share_basic(initial_state) -> None:
     # Verify application state
     final_state = run_smb_zfs_command("get-state")
     assert 'testshare1' in final_state['shares']
-    assert final_state['shares']['testshare1']['dataset']['pool'] == 'primary_testpool'
-    assert final_state['shares']['testshare1']['dataset']['quota'] == '10G'
+    assert final_state['shares']['smb']['testshare1']['dataset']['pool'] == 'primary_testpool'
+    assert final_state['shares']['smb']['testshare1']['dataset']['quota'] == '10G'
 
     # Verify system state
     assert get_zfs_dataset_exists('primary_testpool/shares/testshare1')
@@ -212,7 +212,7 @@ def test_create_share_with_permissions(initial_state) -> None:
     # Verify application state
     final_state = run_smb_zfs_command("get-state")
     assert 'restrictedshare' in final_state['shares']
-    share_config = final_state['shares']['restrictedshare']['smb_config']
+    share_config = final_state['shares']['smb']['restrictedshare']['smb_config']
     assert 'sztest_shareuser' in share_config['valid_users']
     assert share_config['read_only'] is True
     assert share_config['browseable'] is False
@@ -311,7 +311,7 @@ def test_modify_share_basic_properties(basic_users_and_groups: None) -> None:
 
     # Verify application state
     final_state = run_smb_zfs_command("get-state")
-    share_state = final_state['shares']['modshare']
+    share_state = final_state['shares']['smb']['modshare']
     assert share_state['smb_config']['comment'] == 'Modified'
     assert 'sztest_user_b' in share_state['smb_config']['valid_users']
     assert share_state['smb_config']['read_only'] is True
@@ -385,7 +385,7 @@ def test_modify_share_browseable(basic_users_and_groups: None) -> None:
 
     # Verify state
     final_state = run_smb_zfs_command("get-state")
-    assert final_state['shares']['browseshare']['smb_config']['browseable'] is False
+    assert final_state['shares']['smb']['browseshare']['smb_config']['browseable'] is False
     assert 'browseable = no' in read_smb_conf()
 
 

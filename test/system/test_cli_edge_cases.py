@@ -204,10 +204,10 @@ def test_share_permission_combinations(initial_state) -> None:
     assert 'custom_own' in state['shares']
 
     # Verify share configurations
-    assert 'sztest_perm_user1' in state['shares']['mixed_perms']['smb_config']['valid_users']
-    assert '@sztest_perm_group' in state['shares']['mixed_perms']['smb_config']['valid_users']
-    assert state['shares']['readonly_share']['smb_config']['read_only'] == True
-    assert state['shares']['hidden_share']['smb_config']['browseable'] == False
+    assert 'sztest_perm_user1' in state['shares']['smb']['mixed_perms']['smb_config']['valid_users']
+    assert '@sztest_perm_group' in state['shares']['smb']['mixed_perms']['smb_config']['valid_users']
+    assert state['shares']['smb']['readonly_share']['smb_config']['read_only'] == True
+    assert state['shares']['smb']['hidden_share']['smb_config']['browseable'] == False
 
     # Verify ZFS datasets
     assert get_zfs_property(
@@ -411,7 +411,7 @@ def test_get_state_comprehensive(initial_state) -> None:
     assert isinstance(state['shares'], dict)
 
     # Verify share has expected structure
-    share_config = state['shares']['state_share']
+    share_config = state['shares']['smb']['state_share']
     assert 'smb_config' in share_config
     assert share_config['smb_config']['comment'] == 'State test share'
 
@@ -553,8 +553,8 @@ def test_multiple_operations_sequence(initial_state) -> None:
     assert 'workflow_share' in final_state['shares']
 
     # Check final configurations
-    assert final_state['shares']['workflow_share']['smb_config']['comment'] == 'Modified workflow share'
-    assert '@sztest_workflow_group' in final_state['shares']['workflow_share']['smb_config']['valid_users']
+    assert final_state['shares']['smb']['workflow_share']['smb_config']['comment'] == 'Modified workflow share'
+    assert '@sztest_workflow_group' in final_state['shares']['smb']['workflow_share']['smb_config']['valid_users']
 
     # Verify system changes
     assert get_system_user_details('sztest_workflow_user') is not None
@@ -591,9 +591,9 @@ def test_modify_share_boolean_flags(initial_state) -> None:
     # Verify initial state
     state = run_smb_zfs_command("get-state")
     assert 'bool_share' in state['shares']
-    initial_readonly = state['shares']['bool_share']['smb_config'].get(
+    initial_readonly = state['shares']['smb']['bool_share']['smb_config'].get(
         'read_only', False)
-    initial_browseable = state['shares']['bool_share']['smb_config'].get(
+    initial_browseable = state['shares']['smb']['bool_share']['smb_config'].get(
         'browseable', True)
 
     # Test enabling readonly
@@ -603,7 +603,7 @@ def test_modify_share_boolean_flags(initial_state) -> None:
         result, "Share 'bool_share' modified successfully.", json=True)
 
     state = run_smb_zfs_command("get-state")
-    assert state['shares']['bool_share']['smb_config']['read_only'] == True
+    assert state['shares']['smb']['bool_share']['smb_config']['read_only'] == True
 
     # Verify smb.conf
     smb_conf = read_smb_conf()
@@ -616,9 +616,9 @@ def test_modify_share_boolean_flags(initial_state) -> None:
         result, "Share 'bool_share' modified successfully.", json=True)
 
     state = run_smb_zfs_command("get-state")
-    assert state['shares']['bool_share']['smb_config']['browseable'] == False
+    assert state['shares']['smb']['bool_share']['smb_config']['browseable'] == False
     # Should persist
-    assert state['shares']['bool_share']['smb_config']['read_only'] == True
+    assert state['shares']['smb']['bool_share']['smb_config']['read_only'] == True
 
     # Verify smb.conf has both settings
     smb_conf = read_smb_conf()
@@ -740,7 +740,7 @@ def test_delete_share_with_dependencies(initial_state) -> None:
     state = run_smb_zfs_command("get-state")
     assert 'dependent_share' in state['shares']
     assert 'sztest_share_user' in state['users']
-    assert 'sztest_share_user' in state['shares']['dependent_share']['smb_config']['valid_users']
+    assert 'sztest_share_user' in state['shares']['smb']['dependent_share']['smb_config']['valid_users']
 
     # Verify ZFS and smb.conf
     assert get_zfs_property(
@@ -1010,7 +1010,7 @@ def test_smb_conf_consistency(initial_state) -> None:
 
     # Verify state matches smb.conf
     assert 'conf_share' in state['shares']
-    share_config = state['shares']['conf_share']['smb_config']
+    share_config = state['shares']['smb']['conf_share']['smb_config']
 
     assert '[conf_share]' in smb_conf
     assert f"comment = {share_config['comment']}" in smb_conf
@@ -1032,7 +1032,7 @@ def test_smb_conf_consistency(initial_state) -> None:
     updated_smb_conf = read_smb_conf()
 
     # Verify consistency after modification
-    updated_share_config = updated_state['shares']['conf_share']['smb_config']
+    updated_share_config = updated_state['shares']['smb']['conf_share']['smb_config']
     assert updated_share_config['comment'] == 'Modified config test'
     assert "comment = Modified config test" in updated_smb_conf
 
@@ -1160,7 +1160,7 @@ def test_comprehensive_workflow(initial_state) -> None:
             f'primary_testpool/shares/{dataset_name}', 'type') == 'filesystem'
 
         # Verify share configuration
-        share_config = final_state['shares'][share_name]['smb_config']
+        share_config = final_state['shares']['smb'][share_name]['smb_config']
         assert f'@{dept}' in share_config['valid_users']
 
     # Verify common share
@@ -1168,7 +1168,7 @@ def test_comprehensive_workflow(initial_state) -> None:
     assert get_zfs_property(
         'primary_testpool/shares/common', 'type') == 'filesystem'
 
-    common_share_config = final_state['shares']['common']['smb_config']
+    common_share_config = final_state['shares']['smb']['common']['smb_config']
     for username, _ in users:
         assert username in common_share_config['valid_users']
 

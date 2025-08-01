@@ -233,19 +233,19 @@ def wizard_modify_setup(manager: SmbZfsManager, args: Optional[argparse.Namespac
     print("Available ZFS pools:", ", ".join(available_pools))
     
     # Collect new values
-    new_primary_pool = prompt("Primary Pool", default=current_state.get('primary_pool'))
+    new_primary_pool = prompt("Primary Pool", default=current_state['config']['smb'].get('primary_pool'))
     
-    current_secondary = current_state.get('secondary_pools', [])
+    current_secondary = current_state['config']['smb'].get('secondary_pools', [])
     new_secondary_pools_str = prompt("Secondary Pools", default=",".join(current_secondary))
     new_secondary_pools = [p.strip() for p in new_secondary_pools_str.split(',')] if new_secondary_pools_str else []
     
     pools_to_add = list(set(new_secondary_pools) - set(current_secondary))
     pools_to_remove = list(set(current_secondary) - set(new_secondary_pools))
     
-    new_server_name = prompt("Server Name", default=current_state.get('server_name'))
-    new_workgroup = prompt("Workgroup", default=current_state.get('workgroup'))
-    new_macos_optimized = prompt_yes_no("macOS Optimized?", 'y' if current_state.get('macos_optimized') else 'n')
-    new_default_home_quota = prompt("Default Home Quota (e.g., 50G or 'none')", default=current_state.get('default_home_quota') or 'none')
+    new_server_name = prompt("Server Name", default=current_state['config']['smb'].get('server_name'))
+    new_workgroup = prompt("Workgroup", default=current_state['config']['smb'].get('workgroup'))
+    new_macos_optimized = prompt_yes_no("macOS Optimized?", 'y' if current_state['config']['smb'].get('macos_optimized') else 'n')
+    new_default_home_quota = prompt("Default Home Quota (e.g., 50G or 'none')", default=current_state['config']['smb'].get('default_home_quota') or 'none')
 
     # Call manager with explicit named arguments
     result = manager.modify_setup(

@@ -109,7 +109,7 @@ def test_wizard_create_share_basic(initial_state) -> None:
     # Verify state
     final_state = run_smb_zfs_command("get-state")
     assert 'w_testshare' in final_state['shares']
-    assert final_state['shares']['w_testshare']['dataset']['quota'] == '15G'
+    assert final_state['shares']['smb']['w_testshare']['dataset']['quota'] == '15G'
     assert get_zfs_dataset_exists('primary_testpool/shares/w_testshare')
     assert get_zfs_property(
         'primary_testpool/shares/w_testshare', 'quota') == '15G'
@@ -147,7 +147,7 @@ def test_wizard_modify_share_rename_and_pool(initial_state) -> None:
     final_state = run_smb_zfs_command("get-state")
     assert 'w_modshare' not in final_state['shares']
     assert 'w_modshare_renamed' in final_state['shares']
-    assert final_state['shares']['w_modshare_renamed']['dataset']['pool'] == 'secondary_testpool'
+    assert final_state['shares']['smb']['w_modshare_renamed']['dataset']['pool'] == 'secondary_testpool'
     assert not get_zfs_dataset_exists('primary_testpool/shares/w_modshare')
     assert get_zfs_dataset_exists(
         'secondary_testpool/shares/w_modshare_renamed')
@@ -197,10 +197,10 @@ def test_wizard_setup_with_options() -> None:
 
     # Verify state
     state = run_smb_zfs_command("get-state")
-    assert state['workgroup'] == 'MACGROUP'
-    assert state['server_name'] == 'MACSERVER'
-    assert state['macos_optimized'] is True
-    assert state['default_home_quota'] == '20G'
+    assert state['config']['smb']['workgroup'] == 'MACGROUP'
+    assert state['config']['smb']['server_name'] == 'MACSERVER'
+    assert state['config']['smb']['macos_optimized'] is True
+    assert state['config']['smb']['default_home_quota'] == '20G'
     assert 'secondary_testpool' in state['secondary_pools']
     smb_conf = read_smb_conf()
     assert 'workgroup = MACGROUP' in smb_conf
@@ -223,10 +223,10 @@ def test_wizard_modify_setup_settings(initial_state) -> None:
 
     # Verify state
     final_state = run_smb_zfs_command("get-state")
-    assert final_state['workgroup'] == 'NEWGROUP'
-    assert final_state['server_name'] == 'NEWSERVER'
-    assert final_state['macos_optimized'] is False
-    assert final_state['default_home_quota'] == 'none'
+    assert final_state['config']['smb']['workgroup'] == 'NEWGROUP'
+    assert final_state['config']['smb']['server_name'] == 'NEWSERVER'
+    assert final_state['config']['smb']['macos_optimized'] is False
+    assert final_state['config']['smb']['default_home_quota'] == 'none'
     assert 'tertiary_testpool' not in final_state['secondary_pools']
     smb_conf = read_smb_conf()
     assert 'workgroup = NEWGROUP' in smb_conf

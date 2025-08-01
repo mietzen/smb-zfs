@@ -124,7 +124,7 @@ def test_share_with_complex_permissions(comprehensive_setup) -> None:
     smb_conf = read_smb_conf()
 
     assert 'complex_share' in state['shares']
-    share_config = state['shares']['complex_share']
+    share_config = state['shares']['smb']['complex_share']
     assert 'sztest_comp_user1' in share_config['smb_config']['valid_users']
     assert '@sztest_comp_group1' in share_config['smb_config']['valid_users']
     assert 'sztest_comp_user3' in share_config['smb_config']['valid_users']
@@ -195,7 +195,7 @@ def test_share_quota_operations(comprehensive_setup) -> None:
     
     # Check state
     state = run_smb_zfs_command("get-state")
-    assert state['shares']['comp_share2']['dataset']['quota'] == '100G'
+    assert state['shares']['smb']['comp_share2']['dataset']['quota'] == '100G'
 
     # Remove share quota
     cmd2 = "modify share comp_share2 --quota none --json"
@@ -207,7 +207,7 @@ def test_share_quota_operations(comprehensive_setup) -> None:
     
     # Check state
     state = run_smb_zfs_command("get-state")
-    assert state['shares']['comp_share2']['dataset']['quota'] == 'none'
+    assert state['shares']['smb']['comp_share2']['dataset']['quota'] == 'none'
 
 
 # --- Comprehensive Modify Tests ---
@@ -227,7 +227,7 @@ def test_modify_share_all_options(comprehensive_setup) -> None:
     smb_conf = read_smb_conf()
 
     # Check State
-    share_config = state['shares']['modify_all_renamed']
+    share_config = state['shares']['smb']['modify_all_renamed']
     assert share_config['smb_config']['comment'] == 'Fully modified share'
     assert share_config['smb_config']['read_only'] == True
     assert share_config['smb_config']['browseable'] == False
@@ -262,10 +262,10 @@ def test_modify_setup_all_options(comprehensive_setup) -> None:
 
     # Check state
     state = run_smb_zfs_command("get-state")
-    assert state['server_name'] == 'FULLTEST'
-    assert state['workgroup'] == 'FULLGROUP'
-    assert state['macos_optimized'] == True
-    assert state['default_home_quota'] == '40G'
+    assert state['config']['smb']['server_name'] == 'FULLTEST'
+    assert state['config']['smb']['workgroup'] == 'FULLGROUP'
+    assert state['config']['smb']['macos_optimized'] == True
+    assert state['config']['smb']['default_home_quota'] == '40G'
     
     # Check smb.conf
     smb_conf = read_smb_conf()
@@ -354,7 +354,7 @@ def test_long_descriptions_and_comments(comprehensive_setup) -> None:
     # Check state
     state = run_smb_zfs_command("get-state")
     assert state['groups']['sztest_long_desc_group']['description'] == long_description
-    assert state['shares']['long_comment_share']['smb_config']['comment'] == long_description
+    assert state['shares']['smb']['long_comment_share']['smb_config']['comment'] == long_description
     
     # Check ZFS
     assert get_zfs_property('primary_testpool/shares/long_comment_share', 'type') == 'filesystem'
@@ -395,7 +395,7 @@ def test_state_consistency_after_operations(comprehensive_setup) -> None:
     assert 'sztest_state_test' in final_state['groups']['sztest_comp_group1']['members']
     
     # Check share configuration
-    assert 'sztest_state_test' in final_state['shares']['state_share']['smb_config']['valid_users']
+    assert 'sztest_state_test' in final_state['shares']['smb']['state_share']['smb_config']['valid_users']
     
     # Check system consistency
     user_details = get_system_user_details('sztest_state_test')

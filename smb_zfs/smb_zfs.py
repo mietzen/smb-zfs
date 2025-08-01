@@ -159,13 +159,18 @@ class SmbZfsManager:
         self._system.restart_services()
 
         logger.info("Saving initial state configuration.")
+        config = {
+                "primary_pool": primary_pool,
+                "secondary_pools": secondary_pools,
+                "smb": {
+                    "server_name": server_name,
+                    "workgroup": workgroup,
+                    "macos_optimized": macos_optimized,
+                    "default_home_quota": default_home_quota,
+                },
+            }
         self._state.set("initialized", True)
-        self._state.set("primary_pool", primary_pool)
-        self._state.set("secondary_pools", secondary_pools)
-        self._state.set("server_name", server_name)
-        self._state.set("workgroup", workgroup)
-        self._state.set("macos_optimized", macos_optimized)
-        self._state.set("default_home_quota", default_home_quota)
+        self._state.set("config", config)
         self._state.set_item("groups", "smb_users", {"description": "Samba Users Group", "members": [
         ], "created": datetime.utcnow().isoformat()})
 
@@ -182,7 +187,7 @@ class SmbZfsManager:
         if self._system.user_exists(username):
             raise ItemExistsError("system user", username)
 
-        primary_pool = self._state.get("primary_pool")
+        primary_pool = self._state.get("config").get("smb").get("primary_pool")
         home_dataset_name = f"{primary_pool}/homes/{username}" if create_home else None
 
         with self._transaction() as rollback:
@@ -320,7 +325,7 @@ class SmbZfsManager:
         logger.info(
             "Attempting to create share '%s' on dataset path '%s'.", name, dataset_path)
         self._validate_name(name, "share")
-        if self._state.get_item("shares", name):
+        if self._state.get_item("shares", name)['smb']:
             raise ItemExistsError("share", name)
         if ".." in dataset_path or dataset_path.startswith('/'):
             raise InvalidNameError(
@@ -333,8 +338,8 @@ class SmbZfsManager:
         if not self._system.group_exists(group):
             raise StateItemNotFoundError("group", group)
 
-        primary_pool = self._state.get("primary_pool")
-        secondary_pools = self._state.get("secondary_pools", [])
+        primary_pool = self._state.get("config").get("smb").get("primary_pool")
+        secondary_pools = self._state.get("config").get("smb").get("secondary_pools", [])
         managed_pools = [primary_pool] + secondary_pools
         target_pool = pool or primary_pool
         if target_pool not in managed_pools:
@@ -385,7 +390,7 @@ class SmbZfsManager:
 
             self._system.test_samba_config()
             self._system.reload_samba()
-            self._state.set_item("shares", name, share_data)
+            self._state.set_item("shares", name, {'smb': share_data})
 
         logger.info("Share '%s' created successfully.", name)
         return {"msg": f"Share '{name}' created successfully.", "state": self._state.get_data_copy()}
@@ -394,7 +399,7 @@ class SmbZfsManager:
     def delete_share(self, name: str, delete_data: bool = False) -> Dict[str, Any]:
         """Deletes a Samba share and optionally its underlying ZFS dataset."""
         logger.info("Attempting to delete share '%s'.", name)
-        share_info = self._state.get_item("shares", name)
+        share_info = self._state.get_item("shares", name)['smb']
         if not share_info:
             raise StateItemNotFoundError("share", name)
 
@@ -455,7 +460,7 @@ class SmbZfsManager:
         logger.info("Attempting to modify share '%s'.", share_name)
         original_state = self._state.get_data_copy()
         original_share_name = share_name
-        share_info = self._state.get_item("shares", share_name)
+        share_info = self._state.get_item("shares", share_name)['smb']
         if not share_info:
             raise StateItemNotFoundError("share", share_name)
 
@@ -464,8 +469,8 @@ class SmbZfsManager:
             if pool is not None and pool != share_info['dataset']['pool']:
                 logger.info("Moving share '%s' from pool '%s' to '%s'.",
                             share_name, share_info['dataset']['pool'], pool)
-                primary_pool = self._state.get("primary_pool")
-                secondary_pools = self._state.get("secondary_pools", [])
+                primary_pool = self._state.get("config").get("smb").get("primary_pool")
+                secondary_pools = self._state.get("config").get("smb").get("secondary_pools", [])
                 if pool not in ([primary_pool] + secondary_pools):
                     raise SmbZfsError(
                         f"Target pool '{pool}' is not a valid managed pool.")
@@ -494,7 +499,7 @@ class SmbZfsManager:
                 share_info['dataset']['mount_point'] = self._zfs.get_mountpoint(
                     new_dataset_name)
 
-                self._state.set_item("shares", new_share_name, share_info)
+                self._state.set_item("shares", new_share_name, {'smb': share_info})
                 share_info = self._state.get_item(
                     "shares", new_share_name)  # Re-fetch info under new name
                 self._state.delete_item("shares", original_share_name)
@@ -561,7 +566,7 @@ class SmbZfsManager:
                 share_info['smb_config']['browseable'] = browseable
                 samba_config_changed = True
 
-            self._state.set_item("shares", share_name, share_info)
+            self._state.set_item("shares", share_name, {'smb': share_info})
 
             if samba_config_changed:
                 logger.info(
@@ -660,23 +665,25 @@ class SmbZfsManager:
                 'macos_optimized': macos_optimized,
                 'default_home_quota': default_home_quota
             }
+            config = self._state.get("config")
             for key, value in simple_updates.items():
-                if value is not None:
+                if value is not None and config["smb"][key] != value:
                     if key == 'default_home_quota' and str(value).lower() == 'none':
                         value = 'none'
-                    self._state.set(key, value)
+                    config["smb"][key] = value
                     logger.info(
                         "Updated setup parameter '%s' to '%s'.", key, value)
                     config_needs_update = True
 
             if config_needs_update:
+                self._state.set("config", config)
                 logger.info(
                     "Rebuilding Samba configuration due to setup changes.")
                 self._config.create_smb_conf(
-                    self._state.get("primary_pool"),
-                    self._state.get("server_name"),
-                    self._state.get("workgroup"),
-                    self._state.get("macos_optimized")
+                    config["smb"]["primary_pool"],
+                    config["smb"]["server_name"],
+                    config["smb"]["workgroup"],
+                    config["smb"]["macos_optimized"]
                 )
                 all_shares = self.list_items("shares")
                 for share_name, share_info in all_shares.items():
@@ -686,11 +693,11 @@ class SmbZfsManager:
                 self._system.reload_samba()
         except Exception as e:
             self._state.data = original_state
-            self._state.save()
             logger.error(
                 "Error during setup modification: %s. State restored, but filesystem changes might need manual rollback.", e)
             raise
-
+        finally:
+            self._state.save()
         logger.info("Global setup modified successfully.")
         return {"msg": "Global setup modified successfully.", "state": self._state.get_data_copy()}
 
@@ -747,8 +754,8 @@ class SmbZfsManager:
 
         if category == "pools":
             return {
-                "primary_pool": self._state.get("primary_pool"),
-                "secondary_pools": self._state.get("secondary_pools", [])
+                "primary_pool": self._state.get("config").get("smb").get("primary_pool"),
+                "secondary_pools": self._state.get("config").get("smb").get("secondary_pools", [])
             }
 
         items = self._state.list_items(category)
@@ -766,7 +773,7 @@ class SmbZfsManager:
             logger.info("System is not set up, nothing to remove.")
             return {"msg": "System is not set up, nothing to do.", "state": self._state.get_data_copy()}
 
-        primary_pool = self._state.get("primary_pool")
+        primary_pool = self._state.get("config").get("smb").get("primary_pool")
         users = self.list_items("users")
         groups = self.list_items("groups")
         shares = self.list_items("shares")
