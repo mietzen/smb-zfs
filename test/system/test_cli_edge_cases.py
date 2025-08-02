@@ -451,6 +451,26 @@ def test_invalid_pool_operations(initial_state) -> None:
     smb_conf = read_smb_conf()
     assert '[invalid_pool_share]' not in smb_conf
 
+# --- Quota Format and Edge Case Tests ---
+def test_invalid_quota_format(initial_state) -> None:
+    """Test different quota format specifications."""
+    cmd = "create user sztest_quota_user --password 'QuotaPass!' --json"
+    result = run_smb_zfs_command(cmd)
+    check_smb_zfs_result(
+        result, "User 'sztest_quota_user' created successfully.", json=True)
+
+    # Verify state
+    state = run_smb_zfs_command("get-state")
+    assert 'sztest_quota_user' in state['users']
+
+    # Test different quota formats
+    quota_formats = ['1GB', '512 Megabyte', '2 T', '0,5G']
+
+    for quota in quota_formats:
+        cmd = f"modify home sztest_quota_user --quota {quota} --json"
+        result = run_smb_zfs_command(cmd)
+        check_smb_zfs_result(result, "Error: Quota musst be either 'none' or a numeric value followed by a letter, e.g.: 512M, 120G, 1.5T", is_error=True)
+
 
 def test_invalid_user_references(initial_state) -> None:
     """Test operations referencing invalid users."""

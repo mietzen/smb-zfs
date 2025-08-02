@@ -21,6 +21,7 @@ from .errors import (
     ItemExistsError,
     StateItemNotFoundError,
     InvalidNameError,
+    InvalidInputError,
     PrerequisiteError,
     MissingInput,
 )
@@ -113,6 +114,16 @@ class SmbZfsManager:
                 )
         logger.debug("Name '%s' is valid.", name)
 
+
+    def _validate_quota(quota: str) -> bool:
+        logger.debug("Validating quota '%s'", quota)
+        if not re.match(r'(none|\d+\.?\d*[kmgtpez]?)', quota.lower()):
+            raise InvalidInputError(
+                f"Quota musst be either 'none' or a numeric value followed by a letter, e.g.: 512M, 120G, 1.5T"
+            )
+        logger.debug("Quota '%s' is valid.", quota)
+
+
     def setup(self, primary_pool: str, secondary_pools: Optional[List[str]], server_name: str, workgroup: str, macos_optimized: bool = False, default_home_quota: Optional[str] = None) -> Dict[str, Any]:
         """Initializes the system, configures Samba, and sets up ZFS datasets."""
         logger.info("Starting system setup...")
@@ -157,6 +168,9 @@ class SmbZfsManager:
         self._system.test_samba_config()
         self._system.enable_services()
         self._system.restart_services()
+
+        if default_home_quota:
+            self._validate_quota(default_home_quota)
 
         logger.info("Saving initial state configuration.")
         self._state.set("initialized", True)
@@ -348,6 +362,7 @@ class SmbZfsManager:
             rollback.append(lambda: self._zfs.destroy_dataset(full_dataset))
 
             if quota:
+                self._validate_quota(quota)
                 self._zfs.set_quota(full_dataset, quota)
 
             mount_point = self._zfs.get_mountpoint(full_dataset)
@@ -502,6 +517,7 @@ class SmbZfsManager:
                 samba_config_changed = True
 
             if quota is not None:
+                self._validate_quota(quota)
                 new_quota = 'none' if str(quota).lower() == 'none' else quota
                 logger.info("Setting quota for share '%s' to '%s'.",
                             share_name, new_quota)
@@ -654,6 +670,9 @@ class SmbZfsManager:
                 logger.info("Removed secondary pools: %s",
                             ", ".join(remove_pools))
 
+            if default_home_quota:
+                self._validate_quota(default_home_quota)
+
             simple_updates = {
                 'server_name': server_name,
                 'workgroup': workgroup,
@@ -706,6 +725,8 @@ class SmbZfsManager:
                 f"User '{username}' does not have a managed home directory.")
 
         home_dataset = user_info["dataset"]["name"]
+        if quota:
+            self._validate_quota(quota)
         new_quota = quota if quota and quota.lower() != 'none' else 'none'
 
         logger.info("Setting quota on '%s' to '%s'.", home_dataset, new_quota)
