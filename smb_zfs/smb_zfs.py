@@ -115,9 +115,9 @@ class SmbZfsManager:
         logger.debug("Name '%s' is valid.", name)
 
 
-    def _validate_quota(quota: str) -> bool:
+    def _validate_quota(self, quota: str) -> None:
         logger.debug("Validating quota '%s'", quota)
-        if not re.match(r'(none|\d+\.?\d*[kmgtpez]?)', quota.lower()):
+        if not re.match(r'^none$|^\d+\.?\d*[kmgtpez]?$', quota.lower()):
             raise InvalidInputError(
                 f"Quota musst be either 'none' or a numeric value followed by a letter, e.g.: 512M, 120G, 1.5T"
             )

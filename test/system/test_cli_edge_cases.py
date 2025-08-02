@@ -437,7 +437,7 @@ def test_invalid_pool_operations(initial_state) -> None:
 
     # Verify error message
     expected_error = "Error: Pool 'nonexistent_pool' is not a valid pool. Managed pools are: primary_testpool, secondary_testpool, tertiary_testpool"
-    assert result == expected_error
+    check_smb_zfs_result(result, expected_error, is_error=True)
 
     # Verify state unchanged
     state = run_smb_zfs_command("get-state")
@@ -464,12 +464,13 @@ def test_invalid_quota_format(initial_state) -> None:
     assert 'sztest_quota_user' in state['users']
 
     # Test different quota formats
-    quota_formats = ['1GB', '512 Megabyte', '2 T', '0,5G']
+    quota_formats = ['1GB', '"512 Megabyte"', '"2 T"', '0,5G']
 
     for quota in quota_formats:
         cmd = f"modify home sztest_quota_user --quota {quota} --json"
         result = run_smb_zfs_command(cmd)
-        check_smb_zfs_result(result, "Error: Quota musst be either 'none' or a numeric value followed by a letter, e.g.: 512M, 120G, 1.5T", is_error=True)
+        expected_error = "Error: Quota musst be either 'none' or a numeric value followed by a letter, e.g.: 512M, 120G, 1.5T"
+        check_smb_zfs_result(result, expected_error, is_error=True)
 
 
 def test_invalid_user_references(initial_state) -> None:
@@ -484,7 +485,7 @@ def test_invalid_user_references(initial_state) -> None:
     cmd = "modify group sztest_test_group --add-users sztest_nonexistent_user --json"
     result = run_smb_zfs_command(cmd)
     expected_error = "Error: User 'sztest_nonexistent_user' not found or not managed by this tool."
-    assert result == expected_error
+    check_smb_zfs_result(result, expected_error, is_error=True)
 
     # Verify group state unchanged
     state = run_smb_zfs_command("get-state")
@@ -960,7 +961,7 @@ def test_invalid_parameter_combinations(initial_state) -> None:
     cmd = "modify group sztest_comp_group1 --json"
     result = run_smb_zfs_command(cmd)
     expected_error = "Error: Found no users to add or remove!"
-    assert result == expected_error
+    check_smb_zfs_result(result, expected_error, is_error=True)
 
     # Verify state unchanged after error
     state = run_smb_zfs_command("get-state")
