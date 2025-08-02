@@ -252,6 +252,36 @@ def test_modify_share_all_options(comprehensive_setup) -> None:
     assert 'read only = yes' in smb_conf
     assert 'browseable = no' in smb_conf
 
+def test_setup_with_invalid_options() -> None:
+    """Test setup command with various invalid server_name and workgroup options."""
+    cmd_cleanup = "remove --delete-users --delete-data --yes"
+    result_cleanup = run_smb_zfs_command(cmd_cleanup)
+
+    def expected_invalid_name_error(item_type: str, name: str) -> str:
+        return (
+            f"Error: {item_type.capitalize()} name '{name}' is invalid. It must be 1-15 characters long, "
+            "contain only letters, numbers, or hyphens, and must not start or end with a hyphen."
+        )
+
+    tests = [
+        {"server_name": "badend-", "workgroup": "WORKGROUP", "error": expected_invalid_name_error("server_name", "badend-")},
+        {"server_name": "bad$name", "workgroup": "WORKGROUP", "error": expected_invalid_name_error("server_name", "bad$name")},
+        {"server_name": "toolongservername123", "workgroup": "WORKGROUP", "error": expected_invalid_name_error("server_name", "toolongservername123")},
+        {"server_name": "SERVER", "workgroup": "invalid*group", "error": expected_invalid_name_error("workgroup", "invalid*group")},
+        {"server_name": "SERVER", "workgroup": "1234567890123456", "error": expected_invalid_name_error("workgroup", "1234567890123456")},
+        {"server_name": "SERVER", "workgroup": "group-", "error": expected_invalid_name_error("workgroup", "group-")},
+        {"server_name": "'server name'", "workgroup": "workgroup", "error": expected_invalid_name_error("server_name", "server name")},
+    ]
+
+    for test in tests:
+        cmd = (
+            f"setup --primary-pool primary_testpool "
+            f"--server-name {test['server_name']} "
+            f"--workgroup {test['workgroup']} --json"
+        )
+        result = run_smb_zfs_command(cmd)
+        check_smb_zfs_result(result, test["error"], is_error=True)
+
 
 def test_modify_setup_all_options(comprehensive_setup) -> None:
     """Test modifying all setup options."""

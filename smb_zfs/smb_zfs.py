@@ -103,9 +103,15 @@ class SmbZfsManager:
             if not re.match(r"^[a-zA-Z0-9][a-zA-Z0-9_.\-:]{0,79}$", name) or \
                     any(component == "" for component in re.split(r"[._\-:]", name)):
                 raise InvalidNameError(
-                    f"Share name '{name}' is invalid. It must start with a letter or number, "
+                    f"{item_type.capitalize()} name '{name}' is invalid. It must start with a letter or number, "
                     "contain only alphanumeric characters, underscores (_), hyphens (-), colons (:), or periods (.), "
                     "have no empty components, and be 1-80 characters long."
+                )
+        elif item_type_lower in ['server_name', 'workgroup']:
+            if not re.match(r"^(?!-)[A-Za-z0-9-]{1,15}(?<!-)$", name):
+                raise InvalidNameError(
+                    f"{item_type.capitalize()} name '{name}' is invalid. It must be 1-15 characters long, "
+                    "contain only letters, numbers, or hyphens, and must not start or end with a hyphen."
                 )
         else:
             if not re.match(r"^[a-zA-Z0-9._-]+$", name):
@@ -129,6 +135,9 @@ class SmbZfsManager:
         logger.info("Starting system setup...")
         if self._state.is_initialized():
             raise AlreadyInitializedError()
+
+        self._validate_name(server_name, 'server_name')
+        self._validate_name(workgroup, 'workgroup')
 
         secondary_pools = secondary_pools or []
 
@@ -605,6 +614,13 @@ class SmbZfsManager:
         add_pools = add_secondary_pools or []
         remove_pools = remove_secondary_pools or []
 
+        if default_home_quota:
+            self._validate_quota(default_home_quota)
+        if server_name:
+            self._validate_name(server_name, 'server_name')
+        if workgroup:
+            self._validate_name(workgroup, 'workgroup')
+
         try:
             if primary_pool is not None:
                 old_primary_pool = self._state.get('primary_pool')
@@ -669,9 +685,6 @@ class SmbZfsManager:
                 self._state.set('secondary_pools', sorted(list(current_pools)))
                 logger.info("Removed secondary pools: %s",
                             ", ".join(remove_pools))
-
-            if default_home_quota:
-                self._validate_quota(default_home_quota)
 
             simple_updates = {
                 'server_name': server_name,
