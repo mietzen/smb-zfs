@@ -52,33 +52,65 @@ class StateManager:
             ) from e
 
     def load(self) -> None:
-        """Loads the state data from the JSON file."""
+        """Loads the state data from the JSON file. Attempts recovery from backups on corruption."""
         logger.debug("Loading state from file: %s", self.path)
         try:
             with open(self.path, "r") as f:
                 self.data = json.load(f)
             logger.info("State loaded successfully from %s.", self.path)
+            return
         except (IOError, json.JSONDecodeError) as e:
-            raise SmbZfsError(
-                f"Failed to read or parse state file {self.path}: {e}"
-            ) from e
+            logger.warning("Failed to read or parse state file %s: %s", self.path, e)
+
+        # Attempt recovery from backups
+        backup_path = f"{self.path}.backup"
+        init_backup_path = f"{self.path}.backup.init"
+
+        # Try .backup first
+        for candidate, label in [(backup_path, "backup"), (init_backup_path, "initial backup")]:
+            if os.path.exists(candidate):
+                try:
+                    logger.warning("Attempting to restore state from %s file: %s", label, candidate)
+                    shutil.copy(candidate, self.path)
+                    with open(self.path, "r") as f:
+                        self.data = json.load(f)
+                    logger.info("State restored successfully from %s.", candidate)
+                    return
+                except Exception as e2:
+                    logger.error("Failed to restore from %s (%s): %s", label, candidate, e2, exc_info=True)
+
+        # If all recovery attempts failed, raise
+        raise SmbZfsError(f"Failed to read or recover state file {self.path}.")
 
     def save(self) -> None:
-        """Saves the current state data to the JSON file with a backup."""
+        """Saves the current state data to the JSON file atomically with a backup."""
         logger.debug("Saving state to file: %s", self.path)
+        tmp_path = f"{self.path}.tmp"
+        backup_path = f"{self.path}.backup"
         try:
-            backup_path = f"{self.path}.backup"
+            # Create/refresh backup of current file if exists
             if os.path.exists(self.path):
                 logger.debug("Creating backup of state file at %s.", backup_path)
                 shutil.copy(self.path, backup_path)
 
-            with open(self.path, "w") as f:
+            # Write atomically to a temporary file
+            with open(tmp_path, "w") as f:
                 json.dump(self.data, f, indent=2)
-            os.chmod(self.path, 0o600)
+                f.flush()
+                os.fsync(f.fileno())
+            os.chmod(tmp_path, 0o600)
+
+            # Atomic replace
+            os.replace(tmp_path, self.path)
             logger.info("State saved successfully to %s.", self.path)
         except IOError as e:
-            raise SmbZfsError(
-                f"Failed to write state file {self.path}: {e}") from e
+            # Best-effort cleanup of tmp file
+            try:
+                if os.path.exists(tmp_path):
+                    os.remove(tmp_path)
+            except Exception:
+                pass
+            raise SmbZfsError(f"Failed to write state file {self.path}: {e}") from e
 
     def is_initialized(self) -> bool:
         """Checks if the system state is marked as initialized."""

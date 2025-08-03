@@ -60,22 +60,19 @@ class Zfs:
         logger.info("No snapshots found for dataset: %s", dataset)
         return []
 
-    def _get_zfs_property(self, target: str, prop: str) -> str:
-        """Helper to get a single ZFS property value."""
-        logger.debug(
-            "Getting ZFS property '%s' for target '%s'.", prop, target)
+    def _get_zfs_property(self, target: str, prop: str) -> Optional[str]:
+        """Helper to get a single ZFS property value. Returns None on failure."""
+        logger.debug("Getting ZFS property '%s' for target '%s'.", prop, target)
         result = self._system._run(
             ["zfs", "get", "-H", "-p", "-o", "value", prop, target],
             check=False
         )
         if result.returncode == 0:
             value = result.stdout.strip()
-            logger.debug("Property '%s' for '%s' is '%s'.",
-                         prop, target, value)
+            logger.debug("Property '%s' for '%s' is '%s'.", prop, target, value)
             return value
-        logger.warning(
-            "Could not get ZFS property '%s' for target '%s'. Returning '0'.", prop, target)
-        return "0"
+        logger.warning("Could not get ZFS property '%s' for target '%s'.", prop, target)
+        return None
 
     def get_mountpoint(self, dataset: str) -> str:
         """Gets the mountpoint property for a given dataset."""
@@ -146,19 +143,25 @@ class Zfs:
 
     def move_dataset(self, dataset_path: str, new_pool: str) -> None:
         """Safely moves a ZFS dataset to a new pool with verification."""
-        logger.info("Attempting to move dataset '%s' to pool '%s'.",
-                    dataset_path, new_pool)
-        if not self.dataset_exists(dataset_path):
-            raise ZfsCmdError(
-                f"Source dataset '{dataset_path}' does not exist.")
+        logger.info("Attempting to move dataset '%s' to pool '%s'.", dataset_path, new_pool)
 
-        if not self.dataset_exists(new_pool):
+        # Validate source dataset
+        if not self.dataset_exists(dataset_path):
+            raise ZfsCmdError(f"Source dataset '{dataset_path}' does not exist.")
+
+        # Validate destination pool using pool list, not dataset check
+        pools = self.list_pools()
+        if new_pool not in pools:
             raise ZfsCmdError(f"Destination pool '{new_pool}' does not exist.")
 
-        required_bytes = int(self._get_zfs_property(dataset_path, 'used'))
-        available_bytes = int(self._get_zfs_property(new_pool, 'available'))
-        logger.debug("Space check: Required=%d, Available=%d on pool %s.",
-                     required_bytes, available_bytes, new_pool)
+        # Space checks: require properties to exist
+        used_str = self._get_zfs_property(dataset_path, 'used')
+        avail_str = self._get_zfs_property(new_pool, 'available')
+        if used_str is None or avail_str is None:
+            raise ZfsCmdError("Failed to retrieve required ZFS properties for space check.")
+        required_bytes = int(used_str)
+        available_bytes = int(avail_str)
+        logger.debug("Space check: Required=%d, Available=%d on pool %s.", required_bytes, available_bytes, new_pool)
 
         if required_bytes > available_bytes:
             raise ZfsCmdError(
@@ -166,6 +169,7 @@ class Zfs:
                 f"Required: {required_bytes}, Available: {available_bytes}"
             )
 
+        # Ensure parent path exists on destination pool
         base_dataset_name = dataset_path.split('/')[1:]
         new_path = [new_pool]
         for path in base_dataset_name[:-1]:
@@ -176,58 +180,47 @@ class Zfs:
         source_snapshot = f"{dataset_path}@{snapshot_name}"
         dest_dataset = f"{new_pool}/{'/'.join(base_dataset_name)}"
         dest_snapshot = f"{dest_dataset}@{snapshot_name}"
-        logger.debug("Using source snapshot '%s' and destination dataset '%s'.",
-                     source_snapshot, dest_dataset)
+        logger.debug("Using source snapshot '%s' and destination dataset '%s'.", source_snapshot, dest_dataset)
 
         if self.dataset_exists(dest_dataset):
             raise ZfsCmdError(
-                f"Destination dataset '{dest_dataset}' already exists. Please remove it first.")
+                f"Destination dataset '{dest_dataset}' already exists. Please remove it first."
+            )
 
         try:
             logger.info("Creating source snapshot: %s", source_snapshot)
             self._system._run(["zfs", "snapshot", source_snapshot])
-            logger.info("Sending snapshot from '%s' to '%s'.",
-                        source_snapshot, dest_dataset)
+            logger.info("Sending snapshot from '%s' to '%s'.", source_snapshot, dest_dataset)
             self._system._run_piped(
-                [["zfs", "send", source_snapshot], [
-                    "zfs", "recv", "-F", dest_dataset]]
+                [["zfs", "send", source_snapshot], ["zfs", "recv", "-F", dest_dataset]]
             )
 
             logger.info("Verifying data integrity via snapshot GUIDs.")
             source_guid = self._get_zfs_property(source_snapshot, 'guid')
             dest_guid = self._get_zfs_property(dest_snapshot, 'guid')
-            logger.debug("Source GUID: %s, Destination GUID: %s",
-                         source_guid, dest_guid)
+            logger.debug("Source GUID: %s, Destination GUID: %s", source_guid, dest_guid)
 
-            if source_guid == "0" or dest_guid == "0" or source_guid != dest_guid:
+            if source_guid is None or dest_guid is None or source_guid != dest_guid:
                 raise ZfsCmdError(
                     "Verification failed! Snapshot GUIDs do not match. "
                     f"Source: {source_guid}, Dest: {dest_guid}"
                 )
             logger.info("Verification successful. GUIDs match.")
 
-            logger.warning(
-                "Destroying original source dataset: %s", dataset_path)
+            logger.warning("Destroying original source dataset: %s", dataset_path)
             self._system._run(["zfs", "destroy", "-r", dataset_path])
-            logger.debug(
-                "Destroying temporary destination snapshot: %s", dest_snapshot)
+            logger.debug("Destroying temporary destination snapshot: %s", dest_snapshot)
             self._system._run(["zfs", "destroy", dest_snapshot])
             logger.info("Dataset move completed successfully.")
 
         except (subprocess.CalledProcessError, ZfsCmdError) as e:
-            logger.error(
-                "ZFS move failed. Initiating rollback.", exc_info=True)
+            logger.error("ZFS move failed. Initiating rollback.", exc_info=True)
             if self.dataset_exists(dest_dataset):
-                logger.warning(
-                    "Rolling back: destroying partially received dataset '%s'.", dest_dataset)
-                self._system._run(
-                    ["zfs", "destroy", "-r", dest_dataset], check=False)
+                logger.warning("Rolling back: destroying partially received dataset '%s'.", dest_dataset)
+                self._system._run(["zfs", "destroy", "-r", dest_dataset], check=False)
 
             if self.snapshot_exists(source_snapshot):
-                logger.warning(
-                    "Rolling back: destroying source snapshot '%s'.", source_snapshot)
-                self._system._run(
-                    ["zfs", "destroy", source_snapshot], check=False)
+                logger.warning("Rolling back: destroying source snapshot '%s'.", source_snapshot)
+                self._system._run(["zfs", "destroy", source_snapshot], check=False)
 
-            raise ZfsCmdError(
-                "ZFS move failed and has been rolled back.") from e
+            raise ZfsCmdError("ZFS move failed and has been rolled back.") from e

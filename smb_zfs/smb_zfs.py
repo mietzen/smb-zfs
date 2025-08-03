@@ -28,11 +28,6 @@ from .errors import (
 
 # --- Constants and Logger Setup ---
 STATE_FILE = f"/var/lib/{NAME}.state"
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    stream=sys.stdout
-)
 logger = logging.getLogger(__name__)
 
 
@@ -508,19 +503,20 @@ class SmbZfsManager:
             if name is not None:
                 logger.info("Renaming share '%s' to '%s'.", share_name, name)
                 new_share_name = name.lower()
+                # Validate new share name and ensure no collision
+                self._validate_name(new_share_name, "share")
+                if new_share_name != original_share_name and self._state.get_item("shares", new_share_name):
+                    raise ItemExistsError("share", new_share_name)
+
                 current_dataset_path = share_info['dataset']['name']
-                parent_dataset_path = '/'.join(
-                    current_dataset_path.split('/')[:-1])
+                parent_dataset_path = '/'.join(current_dataset_path.split('/')[:-1])
                 new_dataset_name = f"{parent_dataset_path}/{new_share_name}"
-                self._zfs.rename_dataset(
-                    current_dataset_path, new_dataset_name)
+                self._zfs.rename_dataset(current_dataset_path, new_dataset_name)
                 share_info['dataset']['name'] = new_dataset_name
-                share_info['dataset']['mount_point'] = self._zfs.get_mountpoint(
-                    new_dataset_name)
+                share_info['dataset']['mount_point'] = self._zfs.get_mountpoint(new_dataset_name)
 
                 self._state.set_item("shares", new_share_name, share_info)
-                share_info = self._state.get_item(
-                    "shares", new_share_name)  # Re-fetch info under new name
+                share_info = self._state.get_item("shares", new_share_name)  # Re-fetch info under new name
                 self._state.delete_item("shares", original_share_name)
                 share_name = new_share_name  # Update for subsequent operations in this method
                 samba_config_changed = True

@@ -51,15 +51,15 @@ class PrerequisiteError(SmbZfsError):
         super().__init__(self.message)
 
 class InvalidInputError(SmbZfsError):
-    """Raised when a input is invalid characters."""
-
+    """Raised when provided input fails validation or has an invalid format/value."""
+ 
     def __init__(self, message):
         self.message = message
         super().__init__(self.message)
-
+ 
 class MissingInput(SmbZfsError):
-    """Raised when trying to execute zfs commands."""
-
+    """Raised when a required input parameter is missing for the requested operation."""
+ 
     def __init__(self, message):
         self.message = message
         super().__init__(self.message)
