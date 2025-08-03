@@ -444,12 +444,33 @@ def test_invalid_pool_operations(initial_state) -> None:
     assert 'invalid_pool_share' not in state['shares']
 
     # Verify no ZFS dataset created
-    assert get_zfs_property(
-        'nonexistent_pool/shares/invalid_pool_share', 'type') is None
+    assert get_zfs_property('nonexistent_pool/shares/invalid_pool_share', 'type') is None
 
     # Verify no smb.conf entry
     smb_conf = read_smb_conf()
     assert '[invalid_pool_share]' not in smb_conf
+
+def test_rename_share_validation_and_collision(initial_state) -> None:
+    """Ensure share rename validates new name and prevents collisions."""
+    # Create two shares to set up a collision scenario
+    cmd = "create share rs_old --dataset shares/rs_old --json"
+    check_smb_zfs_result(run_smb_zfs_command(cmd), "Share 'rs_old' created successfully.", json=True)
+    cmd = "create share rs_existing --dataset shares/rs_existing --json"
+    check_smb_zfs_result(run_smb_zfs_command(cmd), "Share 'rs_existing' created successfully.", json=True)
+
+    # Attempt to rename to invalid name
+    bad_name = "Invalid*Name"
+    result_bad = run_smb_zfs_command(f"modify share rs_old --name {bad_name} --json")
+    assert "Error: Share name 'invalid*name' is invalid." in result_bad or "Error: Share name 'Invalid*Name' is invalid." in result_bad
+
+    # Attempt to rename to an existing share name (collision)
+    result_collision = run_smb_zfs_command("modify share rs_old --name rs_existing --json")
+    check_smb_zfs_result(result_collision, "Error: Share 'rs_existing' already exists.", is_error=True)
+
+    # Ensure state remains unchanged for original names
+    state = run_smb_zfs_command("get-state")
+    assert 'rs_old' in state['shares']
+    assert 'rs_existing' in state['shares']
 
 # --- Quota Format and Edge Case Tests ---
 def test_invalid_quota_format(initial_state) -> None:
