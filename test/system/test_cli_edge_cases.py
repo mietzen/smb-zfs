@@ -10,6 +10,100 @@ from conftest import (
     read_smb_conf
 )
 
+import os
+import json
+from smb_zfs.smb_zfs import STATE_FILE
+
+# --- State Manager Atomic Write & Recovery Error Behaviour Tests ---
+def test_state_recovery_from_backup_on_corruption() -> None:
+    """Corrupt the main state file and ensure recovery from .backup works via CLI get-state."""
+    # Precondition: environment is set up by autouse fixture, state file exists
+    assert os.path.exists(STATE_FILE), "Expected state file to exist after setup"
+
+    # Create a change to ensure a non-empty .backup exists after a save operation
+    result = run_smb_zfs_command("create group sztest_backup_probe --json")
+    check_smb_zfs_result(result, "Group 'sztest_backup_probe' created successfully.", json=True)
+    assert os.path.exists(STATE_FILE + ".backup"), "Expected backup to exist after save"
+
+    # Read current good state content for verification later
+    with open(STATE_FILE, "r") as f:
+        good_state = json.load(f)
+    assert good_state.get("groups", {}).get("sztest_backup_probe") is not None
+
+    # Corrupt the main state file
+    with open(STATE_FILE, "w") as f:
+        f.write("{ this is not valid json :::")
+
+    # Now call a command that loads state. get-state should trigger recovery path.
+    recovered = run_smb_zfs_command("get-state")
+    assert isinstance(recovered, dict), "Expected JSON output after recovery"
+    # Ensure the recovered state contains the previously created group
+    assert recovered.get("groups", {}).get("sztest_backup_probe") is not None
+
+def test_state_recovery_from_initial_backup_when_backup_missing() -> None:
+    """Force recovery from .backup.init by removing .backup and corrupting main file."""
+    # Ensure state exists and initial backup should have been created during initialization
+    assert os.path.exists(STATE_FILE), "Expected state file to exist after setup"
+
+    # Ensure at least one save has occurred and then remove the current .backup
+    result = run_smb_zfs_command("create group sztest_init_probe --json")
+    check_smb_zfs_result(result, "Group 'sztest_init_probe' created successfully.", json=True)
+
+    backup = STATE_FILE + ".backup"
+    init_backup = STATE_FILE + ".backup.init"
+    # Some implementations may not create .backup.init on demand; if not present, emulate initial backup by copying current
+    if not os.path.exists(init_backup):
+        # Create a synthetic .backup.init representing an earlier sane state:
+        with open(STATE_FILE, "r") as f:
+            current = f.read()
+        with open(init_backup, "w") as f:
+            f.write(current)
+
+    if os.path.exists(backup):
+        os.remove(backup)
+
+    # Corrupt the main state file
+    with open(STATE_FILE, "w") as f:
+        f.write("{{{ invalid json 123 }}")
+
+    # Trigger load which should now attempt .backup then fallback to .backup.init
+    recovered = run_smb_zfs_command("get-state")
+    assert isinstance(recovered, dict), "Expected JSON output after recovery from .backup.init"
+    # Cannot guarantee the synthetic .backup.init contains the latest group, but it must be a valid state dict
+    assert "initialized" in recovered
+
+def test_state_save_permissions_and_atomicity() -> None:
+    """Ensure save creates 0600 permissions and does not leave .tmp behind."""
+    # Perform an operation that triggers a save
+    result = run_smb_zfs_command("create group sztest_perm_probe --json")
+    check_smb_zfs_result(result, "Group 'sztest_perm_probe' created successfully.", json=True)
+
+    # Check permissions are 600 as set by StateManager.save()
+    perm = get_file_permissions(STATE_FILE)
+    assert perm == 600, f"Expected state file permissions 600, got {perm}"
+
+    # Ensure no leftover temporary file from atomic write
+    assert not os.path.exists(STATE_FILE + ".tmp"), "Temporary file should not remain after atomic replace"
+
+def test_state_load_failure_when_no_recovery_available() -> None:
+    """If both main and backups are unreadable/missing, CLI should report an error."""
+    # Remove any backups
+    for suffix in (".backup", ".backup.init"):
+        p = STATE_FILE + suffix
+        if os.path.exists(p):
+            os.remove(p)
+    # Corrupt main state
+    if os.path.exists(STATE_FILE):
+        with open(STATE_FILE, "w") as f:
+            f.write("not-json-at-all")
+
+    # get-state should now error since no recovery is possible
+    result = run_smb_zfs_command("get-state")
+    # Expect the standardized error format from conftest.check_smb_zfs_result path
+    expected_error_prefix = "Error: Failed to read or recover state file"
+    assert isinstance(result, str)
+    assert expected_error_prefix in result
+
 
 # --- Pool Configuration Tests ---
 def test_create_share_on_different_pools(initial_state) -> None:
