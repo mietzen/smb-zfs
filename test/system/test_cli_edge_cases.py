@@ -11,7 +11,6 @@ from conftest import (
 )
 
 import os
-import json
 from smb_zfs.smb_zfs import STATE_FILE
 
 # --- State Manager Atomic Write & Recovery Error Behaviour Tests ---
