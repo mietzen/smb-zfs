@@ -2,7 +2,6 @@ import grp
 import os
 import pwd
 import re
-import sys
 import logging
 from contextlib import contextmanager
 from datetime import datetime
