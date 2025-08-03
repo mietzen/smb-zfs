@@ -20,15 +20,18 @@ def test_state_recovery_from_backup_on_corruption() -> None:
     # Precondition: environment is set up by autouse fixture, state file exists
     assert os.path.exists(STATE_FILE), "Expected state file to exist after setup"
 
-    # Create a change to ensure a non-empty .backup exists after a save operation
+    # Create a change to ensure a non-empty .backup exists after a save operation,
+    # and capture the reported state to avoid relying on re-reading the file.
     result = run_smb_zfs_command("create group sztest_backup_probe --json")
     check_smb_zfs_result(result, "Group 'sztest_backup_probe' created successfully.", json=True)
-    assert os.path.exists(STATE_FILE + ".backup"), "Expected backup to exist after save"
 
-    # Read current good state content for verification later
-    with open(STATE_FILE, "r") as f:
-        good_state = json.load(f)
-    assert good_state.get("groups", {}).get("sztest_backup_probe") is not None
+    # Capture the state via CLI (ensures it went through the manager/save path)
+    state_after_create = run_smb_zfs_command("get-state")
+    assert isinstance(state_after_create, dict)
+    assert state_after_create.get("groups", {}).get("sztest_backup_probe") is not None
+
+    # Verify backup exists now (save should have created/updated it)
+    assert os.path.exists(STATE_FILE + ".backup"), "Expected backup to exist after save"
 
     # Corrupt the main state file
     with open(STATE_FILE, "w") as f:
