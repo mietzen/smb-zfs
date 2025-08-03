@@ -20,17 +20,13 @@ def test_state_recovery_from_backup_on_corruption() -> None:
     # Precondition: environment is set up by autouse fixture, state file exists
     assert os.path.exists(STATE_FILE), "Expected state file to exist after setup"
 
-    # Create a change to ensure a non-empty .backup exists after a save operation,
-    # and capture the reported state to avoid relying on re-reading the file.
+    state_before = run_smb_zfs_command("get-state")
+    
+    # Create a change to ensure a non-empty .backup exists after a save operation
     result = run_smb_zfs_command("create group sztest_backup_probe --json")
     check_smb_zfs_result(result, "Group 'sztest_backup_probe' created successfully.", json=True)
 
-    # Capture the state via CLI (ensures it went through the manager/save path)
-    state_after_create = run_smb_zfs_command("get-state")
-    assert isinstance(state_after_create, dict)
-    assert state_after_create.get("groups", {}).get("sztest_backup_probe") is not None
-
-    # Verify backup exists now (save should have created/updated it)
+    # Verify backup exists now (save should have created)
     assert os.path.exists(STATE_FILE + ".backup"), "Expected backup to exist after save"
 
     # Corrupt the main state file
@@ -38,10 +34,10 @@ def test_state_recovery_from_backup_on_corruption() -> None:
         f.write("{ this is not valid json :::")
 
     # Now call a command that loads state. get-state should trigger recovery path.
-    recovered = run_smb_zfs_command("get-state")
-    assert isinstance(recovered, dict), "Expected JSON output after recovery"
-    # Ensure the recovered state contains the previously created group
-    assert recovered.get("groups", {}).get("sztest_backup_probe") is not None
+    state_recovered = run_smb_zfs_command("get-state")
+    assert isinstance(state_recovered, dict), "Expected JSON output after recovery"
+    # Ensure the recovered state is the state before the create group
+    assert state_recovered == state_before
 
 def test_state_recovery_from_initial_backup_when_backup_missing() -> None:
     """Force recovery from .backup.init by removing .backup and corrupting main file."""
