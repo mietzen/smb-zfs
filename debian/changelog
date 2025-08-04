@@ -1,3 +1,9 @@
+smb-zfs (0.8.0-1) stable; urgency=medium
+
+  * Release 0.8.0: https://github.com/mietzen/smb-zfs/releases/tag/0.8.0
+
+ -- Nils <31704359+mietzen@users.noreply.github.com>  Mon, 04 Aug 2025 10:43:22 +0000
+
 smb-zfs (0.7.4-1) stable; urgency=medium
 
   * Release 0.7.4: https://github.com/mietzen/smb-zfs/releases/tag/0.7.4
