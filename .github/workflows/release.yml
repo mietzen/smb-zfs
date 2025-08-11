@@ -10,7 +10,7 @@ jobs:
     permissions:
         id-token: write
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
     - uses: actions/setup-python@v5
       with:
         python-version: '3.11'
@@ -37,7 +37,7 @@ jobs:
             | jq -r '.assets[] | select(.name | test("linux_amd64\\.deb$")) | .browser_download_url')
         curl -sL "$URL" -o gh_latest_linux_amd64.deb
         apt install -y ./gh_latest_linux_amd64.deb
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
       with:
         path: src
         fetch-depth: 0
