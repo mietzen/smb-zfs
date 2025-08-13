@@ -82,7 +82,7 @@ def cmd_create_user(manager: SmbZfsManager, args: argparse.Namespace) -> None:
     groups = args.groups.split(",") if args.groups else []
     create_home = not args.no_home
     result = manager.create_user(
-        args.user, password, args.shell, groups, create_home)
+        args.user, password, args.shell, groups, create_home, use_existing=getattr(args, "use_existing", False))
     _handle_output(result, args)
 
 
@@ -118,6 +118,7 @@ def cmd_create_share(manager: SmbZfsManager, args: argparse.Namespace) -> None:
         browseable=not args.no_browse,
         quota=args.quota,
         pool=args.pool,
+        use_existing=getattr(args, "use_existing", False),
     )
     _handle_output(result, args)
 
@@ -135,7 +136,7 @@ def cmd_create_group(manager: SmbZfsManager, args: argparse.Namespace) -> None:
         print("  - Update state file")
         return
     check_root()
-    result = manager.create_group(args.group, args.description, users)
+    result = manager.create_group(args.group, args.description, users, use_existing=getattr(args, "use_existing", False))
     _handle_output(result, args)
 
 
@@ -486,6 +487,11 @@ def create_parser() -> argparse.ArgumentParser:
         "--password", help="Set the user's password. If omitted, will prompt securely."
     )
     p_create_user.add_argument(
+        "--use-existing",
+        action="store_true",
+        help="Use an existing system user instead of creating a new one.",
+    )
+    p_create_user.add_argument(
         "--shell",
         action="store_true",
         help="Grant the user a standard shell (/bin/bash).",
@@ -514,6 +520,11 @@ def create_parser() -> argparse.ArgumentParser:
         "--dataset",
         required=True,
         help="The path for the ZFS dataset within the pool (e.g., 'data/projects').",
+    )
+    p_create_share.add_argument(
+        "--use-existing",
+        action="store_true",
+        help="Use an existing ZFS dataset instead of creating a new one.",
     )
     p_create_share.add_argument(
         "--pool", help="The ZFS pool to create the share in. Defaults to the primary pool."
@@ -567,6 +578,11 @@ def create_parser() -> argparse.ArgumentParser:
     p_create_group.add_argument("group", help="The name of the group.")
     p_create_group.add_argument(
         "--description", default="", help="A description for the group."
+    )
+    p_create_group.add_argument(
+        "--use-existing",
+        action="store_true",
+        help="Use an existing system group instead of creating a new one.",
     )
     p_create_group.add_argument(
         "--users", help="A comma-separated list of initial members."

@@ -5,7 +5,13 @@ from conftest import (
     read_smb_conf,
     get_file_permissions,
     get_owner_and_group,
-    check_smb_zfs_result
+    check_smb_zfs_result,
+    create_system_user,
+    delete_system_user,
+    create_system_group,
+    delete_system_group,
+    create_zfs_dataset,
+    delete_zfs_dataset
 )
 from smb_zfs.config_generator import MACOS_SETTINGS
 
@@ -87,6 +93,78 @@ def test_nonexistent_share_operations(comprehensive_setup) -> None:
     for cmd, expected_error in commands:
         result = run_smb_zfs_command(cmd)
         check_smb_zfs_result(result, expected_error, is_error=True)
+
+
+# --- Use Existing System Resource Tests ---
+def test_create_user_with_use_existing(monkeypatch, comprehensive_setup):
+    """Test creating a user with --use-existing when the system user exists."""
+    username = "sztest_existing_user"
+    password = "ExistingPass!"
+    # Create system user directly
+    create_system_user(username)
+    try:
+        cmd = f"create user {username} --password '{password}' --use-existing --json"
+        result = run_smb_zfs_command(cmd)
+        check_smb_zfs_result(result, f"User '{username}' created successfully.", json=True)
+        # Check state
+        state = run_smb_zfs_command("get-state")
+        assert username in state['users']
+        # Check system user still exists
+        user_details = get_system_user_details(username)
+        assert user_details is not None
+    finally:
+        delete_system_user(username)
+
+
+def test_create_group_with_use_existing(monkeypatch, comprehensive_setup):
+    """Test creating a group with --use-existing when the system group exists."""
+    groupname = "sztest_existing_group"
+    # Create system group directly
+    create_system_group(groupname)
+    try:
+        cmd = f"create group {groupname} --use-existing --json"
+        result = run_smb_zfs_command(cmd)
+        check_smb_zfs_result(result, f"Group '{groupname}' created successfully.", json=True)
+        # Check state
+        state = run_smb_zfs_command("get-state")
+        assert groupname in state['groups']
+    finally:
+        delete_system_group(groupname)
+
+
+def test_create_share_with_use_existing(monkeypatch, comprehensive_setup):
+    """Test creating a share with --use-existing when the ZFS dataset exists."""
+    share = "sztest_existing_share"
+    dataset = "shares/sztest_existing_share"
+    pool = "primary_testpool"
+    full_dataset = f"{pool}/{dataset}"
+    # Create ZFS dataset directly
+    create_zfs_dataset(full_dataset)
+    try:
+        cmd = f"create share {share} --dataset {dataset} --use-existing --json"
+        result = run_smb_zfs_command(cmd)
+        check_smb_zfs_result(result, f"Share '{share}' created successfully.", json=True)
+        # Check state
+        state = run_smb_zfs_command("get-state")
+        assert share in state['shares']
+    finally:
+        delete_zfs_dataset(full_dataset)
+
+
+def test_use_existing_user_group_share_errors(comprehensive_setup):
+    """Test error when using --use-existing for non-existent user/group/share."""
+    # User
+    cmd = "create user sztest_nonexistent --password 'X' --use-existing --json"
+    result = run_smb_zfs_command(cmd)
+    check_smb_zfs_result(result, "Error: System user 'sztest_nonexistent' not found.", is_error=True)
+    # Group
+    cmd = "create group sztest_nonexistent_group --use-existing --json"
+    result = run_smb_zfs_command(cmd)
+    check_smb_zfs_result(result, "Error: System group 'sztest_nonexistent_group' not found.", is_error=True)
+    # Share (dataset)
+    cmd = "create share sztest_nonexistent_share --dataset shares/sztest_nonexistent_share --use-existing --json"
+    result = run_smb_zfs_command(cmd)
+    assert "Error" in result and "not found" in result
 
 
 # --- Complex Scenario Tests ---

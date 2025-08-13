@@ -155,6 +155,42 @@ def get_system_group_exists(groupname):
         return False
 
 
+def create_system_user(username, shell="/usr/sbin/nologin", with_home=False):
+    """Create a system user directly."""
+    cmd = ["useradd"]
+    if not with_home:
+        cmd.append("-M")
+    if shell:
+        cmd.extend(["-s", shell])
+    cmd.append(username)
+    subprocess.run(cmd, check=True)
+
+
+def delete_system_user(username):
+    """Delete a system user directly."""
+    subprocess.run(["userdel", username], check=False)
+
+
+def create_system_group(groupname):
+    """Create a system group directly."""
+    subprocess.run(["groupadd", groupname], check=True)
+
+
+def delete_system_group(groupname):
+    """Delete a system group directly."""
+    subprocess.run(["groupdel", groupname], check=False)
+
+
+def create_zfs_dataset(dataset):
+    """Create a ZFS dataset directly."""
+    subprocess.run(["zfs", "create", dataset], check=True)
+
+
+def delete_zfs_dataset(dataset):
+    """Delete a ZFS dataset directly."""
+    subprocess.run(["zfs", "destroy", dataset], check=False)
+
+
 def get_zfs_property(dataset, prop):
     """Get a specific ZFS property."""
     try:
