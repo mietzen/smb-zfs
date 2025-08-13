@@ -19,6 +19,7 @@ from .errors import (
     AlreadyInitializedError,
     ItemExistsError,
     StateItemNotFoundError,
+    SystemItemNotFoundError,
     InvalidNameError,
     InvalidInputError,
     PrerequisiteError,
@@ -119,7 +120,7 @@ class SmbZfsManager:
         logger.debug("Validating quota '%s'", quota)
         if not re.match(r'^none$|^\d+\.?\d*[kmgtpez]?$', quota.lower()):
             raise InvalidInputError(
-                f"Quota musst be either 'none' or a numeric value followed by a letter, e.g.: 512M, 120G, 1.5T"
+                "Quota musst be either 'none' or a numeric value followed by a letter, e.g.: 512M, 120G, 1.5T"
             )
         logger.debug("Quota '%s' is valid.", quota)
 
@@ -374,9 +375,9 @@ class SmbZfsManager:
             raise InvalidNameError(
                 f"Permissions '{perms}' are invalid. Must be 3 or 4 octal digits (e.g., 775 or 0775).")
         if not self._system.user_exists(owner):
-            raise StateItemNotFoundError("user", owner)
+            raise SystemItemNotFoundError("user", owner)
         if not self._system.group_exists(group):
-            raise StateItemNotFoundError("group", group)
+            raise SystemItemNotFoundError("group", group)
 
         primary_pool = self._state.get("primary_pool")
         secondary_pools = self._state.get("secondary_pools", [])
