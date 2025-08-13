@@ -100,7 +100,7 @@ def test_create_user_with_use_existing(monkeypatch, comprehensive_setup):
     """Test creating a user with --use-existing when the system user exists."""
     username = "sztest_existing_user"
     password = "ExistingPass!"
-    # Create system user directly
+    # Create system user directly, but no home dataset
     create_system_user(username)
     try:
         cmd = f"create user {username} --password '{password}' --use-existing --json"
@@ -109,6 +109,7 @@ def test_create_user_with_use_existing(monkeypatch, comprehensive_setup):
         # Check state
         state = run_smb_zfs_command("get-state")
         assert username in state['users']
+        assert "dataset" not in state['users'][username]  # No home dataset should be linked
         # Check system user still exists
         user_details = get_system_user_details(username)
         assert user_details is not None

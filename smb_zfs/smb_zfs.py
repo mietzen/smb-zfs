@@ -198,7 +198,7 @@ class SmbZfsManager:
             raise ItemExistsError("user", username)
         if use_existing:
             if not self._system.user_exists(username):
-                raise StateItemNotFoundError("system user", username)
+                raise SystemItemNotFoundError("user", username)
         else:
             if self._system.user_exists(username):
                 raise ItemExistsError("system user", username)
@@ -213,11 +213,14 @@ class SmbZfsManager:
             if use_existing:
                 # Only register the user in state, add to Samba if not present
                 if create_home and home_dataset_name:
-                    # Assume dataset exists, get mountpoint and quota if possible
-                    home_mountpoint = self._zfs.get_mountpoint(home_dataset_name)
-                    default_home_quota = self._state.get("default_home_quota")
-                    user_data["dataset"] = {
-                        "name": home_dataset_name, "mount_point": home_mountpoint, "quota": default_home_quota, "pool": primary_pool}
+                    if self._zfs.dataset_exists(home_dataset_name):
+                        # Assume dataset exists, get mountpoint and quota if possible
+                        home_mountpoint = self._zfs.get_mountpoint(home_dataset_name)
+                        default_home_quota = self._state.get("default_home_quota")
+                        user_data["dataset"] = {
+                            "name": home_dataset_name, "mount_point": home_mountpoint, "quota": default_home_quota, "pool": primary_pool}
+                    else:
+                        logger.warning("Home directory dataset '%s' does not exist for existing user '%s'. Not managing home directory.", home_dataset_name, username)
                 # Add to Samba if not present
                 self._system.add_samba_user(username, password)
                 self._system.add_user_to_group(username, "smb_users")
