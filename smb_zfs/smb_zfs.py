@@ -19,6 +19,7 @@ from .errors import (
     AlreadyInitializedError,
     ItemExistsError,
     StateItemNotFoundError,
+    SystemItemNotFoundError,
     InvalidNameError,
     InvalidInputError,
     PrerequisiteError,
@@ -119,7 +120,7 @@ class SmbZfsManager:
         logger.debug("Validating quota '%s'", quota)
         if not re.match(r'^none$|^\d+\.?\d*[kmgtpez]?$', quota.lower()):
             raise InvalidInputError(
-                f"Quota musst be either 'none' or a numeric value followed by a letter, e.g.: 512M, 120G, 1.5T"
+                "Quota musst be either 'none' or a numeric value followed by a letter, e.g.: 512M, 120G, 1.5T"
             )
         logger.debug("Quota '%s' is valid.", quota)
 
@@ -190,71 +191,88 @@ class SmbZfsManager:
         return {"msg": "Setup completed successfully.", "state": self._state.get_data_copy()}
 
     @requires_initialization
-    def create_user(self, username: str, password: str, allow_shell: bool = False, groups: Optional[List[str]] = None, create_home: bool = True) -> Dict[str, Any]:
+    def create_user(self, username: str, password: str, allow_shell: bool = False, groups: Optional[List[str]] = None, create_home: bool = True, use_existing: bool = False) -> Dict[str, Any]:
         """Creates a new system and Samba user with an optional ZFS home directory."""
         logger.info("Attempting to create user '%s'.", username)
         self._validate_name(username, "user")
         if self._state.get_item("users", username):
             raise ItemExistsError("user", username)
-        if self._system.user_exists(username):
-            raise ItemExistsError("system user", username)
+        if use_existing:
+            if not self._system.user_exists(username):
+                raise SystemItemNotFoundError("user", username)
+        else:
+            if self._system.user_exists(username):
+                raise ItemExistsError("system user", username)
 
         primary_pool = self._state.get("primary_pool")
         home_dataset_name = f"{primary_pool}/homes/{username}" if create_home else None
 
         with self._transaction() as rollback:
-            user_data: Dict[str, Any] = {"shell_access": allow_shell, "groups": [
-            ], "created": datetime.utcnow().isoformat()}
+            user_data: Dict[str, Any] = {"shell_access": allow_shell, "groups": [], "created": datetime.utcnow().isoformat()}
             home_mountpoint = None
 
-            if create_home and home_dataset_name:
-                logger.info("Creating home dataset '%s'.", home_dataset_name)
-                self._zfs.create_dataset(home_dataset_name)
-                rollback.append(
-                    lambda: self._zfs.destroy_dataset(home_dataset_name))
-                home_mountpoint = self._zfs.get_mountpoint(home_dataset_name)
-
-                default_home_quota = self._state.get("default_home_quota")
-                if default_home_quota:
-                    self._zfs.set_quota(home_dataset_name, default_home_quota)
-
-                user_data["dataset"] = {
-                    "name": home_dataset_name, "mount_point": home_mountpoint, "quota": default_home_quota, "pool": primary_pool}
-
-            logger.info("Adding system user '%s'.", username)
-            self._system.add_system_user(username, home_dir=home_mountpoint if allow_shell else None, shell=(
-                "/bin/bash" if allow_shell else "/usr/sbin/nologin"))
-            rollback.append(lambda: self._system.delete_system_user(username))
-
-            if create_home and home_mountpoint:
-                uid = pwd.getpwnam(username).pw_uid
-                gid = pwd.getpwnam(username).pw_gid
-                os.chown(home_mountpoint, uid, gid)
-                os.chmod(home_mountpoint, 0o700)
-                logger.debug(
-                    "Set permissions on home directory for '%s'.", username)
-
-            if allow_shell:
-                self._system.set_system_password(username, password)
-
-            logger.info("Adding Samba user '%s'.", username)
-            self._system.add_samba_user(username, password)
-            rollback.append(lambda: self._system.delete_samba_user(username))
-
-            self._system.add_user_to_group(username, "smb_users")
-            user_groups = []
-            if groups:
-                for group in groups:
-                    if self._state.get_item("groups", group):
-                        self._system.add_user_to_group(username, group)
-                        user_groups.append(group)
+            if use_existing:
+                # Only register the user in state, add to Samba if not present
+                if create_home and home_dataset_name:
+                    if self._zfs.dataset_exists(home_dataset_name):
+                        # Assume dataset exists, get mountpoint and quota if possible
+                        home_mountpoint = self._zfs.get_mountpoint(home_dataset_name)
+                        default_home_quota = self._state.get("default_home_quota")
+                        user_data["dataset"] = {
+                            "name": home_dataset_name, "mount_point": home_mountpoint, "quota": default_home_quota, "pool": primary_pool}
                     else:
-                        logger.warning(
-                            "Group '%s' not found in state, skipping for user '%s'.", group, username)
-                        raise StateItemNotFoundError("group", group)
-            user_data["groups"] = user_groups
-
-            self._state.set_item("users", username, user_data)
+                        logger.warning("Home directory dataset '%s' does not exist for existing user '%s'. Not managing home directory.", home_dataset_name, username)
+                # Add to Samba if not present
+                self._system.add_samba_user(username, password)
+                self._system.add_user_to_group(username, "smb_users")
+                user_groups = []
+                if groups:
+                    for group in groups:
+                        if self._state.get_item("groups", group):
+                            self._system.add_user_to_group(username, group)
+                            user_groups.append(group)
+                        else:
+                            logger.warning("Group '%s' not found in state, skipping for user '%s'.", group, username)
+                            raise StateItemNotFoundError("group", group)
+                user_data["groups"] = user_groups
+                self._state.set_item("users", username, user_data)
+            else:
+                if create_home and home_dataset_name:
+                    logger.info("Creating home dataset '%s'.", home_dataset_name)
+                    self._zfs.create_dataset(home_dataset_name)
+                    rollback.append(lambda: self._zfs.destroy_dataset(home_dataset_name))
+                    home_mountpoint = self._zfs.get_mountpoint(home_dataset_name)
+                    default_home_quota = self._state.get("default_home_quota")
+                    if default_home_quota:
+                        self._zfs.set_quota(home_dataset_name, default_home_quota)
+                    user_data["dataset"] = {
+                        "name": home_dataset_name, "mount_point": home_mountpoint, "quota": default_home_quota, "pool": primary_pool}
+                logger.info("Adding system user '%s'.", username)
+                self._system.add_system_user(username, home_dir=home_mountpoint if allow_shell else None, shell=("/bin/bash" if allow_shell else "/usr/sbin/nologin"))
+                rollback.append(lambda: self._system.delete_system_user(username))
+                if create_home and home_mountpoint:
+                    uid = pwd.getpwnam(username).pw_uid
+                    gid = pwd.getpwnam(username).pw_gid
+                    os.chown(home_mountpoint, uid, gid)
+                    os.chmod(home_mountpoint, 0o700)
+                    logger.debug("Set permissions on home directory for '%s'.", username)
+                if allow_shell:
+                    self._system.set_system_password(username, password)
+                logger.info("Adding Samba user '%s'.", username)
+                self._system.add_samba_user(username, password)
+                rollback.append(lambda: self._system.delete_samba_user(username))
+                self._system.add_user_to_group(username, "smb_users")
+                user_groups = []
+                if groups:
+                    for group in groups:
+                        if self._state.get_item("groups", group):
+                            self._system.add_user_to_group(username, group)
+                            user_groups.append(group)
+                        else:
+                            logger.warning("Group '%s' not found in state, skipping for user '%s'.", group, username)
+                            raise StateItemNotFoundError("group", group)
+                user_data["groups"] = user_groups
+                self._state.set_item("users", username, user_data)
 
         logger.info("User '%s' created successfully.", username)
         return {"msg": f"User '{username}' created successfully.", "state": self._state.get_data_copy()}
@@ -284,32 +302,43 @@ class SmbZfsManager:
         return {"msg": f"User '{username}' deleted successfully.", "state": self._state.get_data_copy()}
 
     @requires_initialization
-    def create_group(self, groupname: str, description: str = "", members: Optional[List[str]] = None) -> Dict[str, Any]:
+    def create_group(self, groupname: str, description: str = "", members: Optional[List[str]] = None, use_existing: bool = False) -> Dict[str, Any]:
         """Creates a new system group and registers it in the state."""
         logger.info("Attempting to create group '%s'.", groupname)
         self._validate_name(groupname, "group")
         if self._state.get_item("groups", groupname):
             raise ItemExistsError("group", groupname)
-        if self._system.group_exists(groupname):
-            raise ItemExistsError("system group", groupname)
+        if use_existing:
+            if not self._system.group_exists(groupname):
+                raise StateItemNotFoundError("system group", groupname)
+        else:
+            if self._system.group_exists(groupname):
+                raise ItemExistsError("system group", groupname)
 
         with self._transaction() as rollback:
-            logger.info("Adding system group '%s'.", groupname)
-            self._system.add_system_group(groupname)
-            rollback.append(
-                lambda: self._system.delete_system_group(groupname))
-
             added_members = []
-            if members:
-                for user in members:
-                    if not self._state.get_item("users", user):
-                        raise StateItemNotFoundError("user", user)
-                    self._system.add_user_to_group(user, groupname)
-                    added_members.append(user)
-
-            group_config = {"description": description or f"{groupname} Group",
-                            "members": added_members, "created": datetime.utcnow().isoformat()}
-            self._state.set_item("groups", groupname, group_config)
+            if use_existing:
+                # Only register the group in state, add members if needed
+                if members:
+                    for user in members:
+                        if not self._state.get_item("users", user):
+                            raise StateItemNotFoundError("user", user)
+                        self._system.add_user_to_group(user, groupname)
+                        added_members.append(user)
+                group_config = {"description": description or f"{groupname} Group", "members": added_members, "created": datetime.utcnow().isoformat()}
+                self._state.set_item("groups", groupname, group_config)
+            else:
+                logger.info("Adding system group '%s'.", groupname)
+                self._system.add_system_group(groupname)
+                rollback.append(lambda: self._system.delete_system_group(groupname))
+                if members:
+                    for user in members:
+                        if not self._state.get_item("users", user):
+                            raise StateItemNotFoundError("user", user)
+                        self._system.add_user_to_group(user, groupname)
+                        added_members.append(user)
+                group_config = {"description": description or f"{groupname} Group", "members": added_members, "created": datetime.utcnow().isoformat()}
+                self._state.set_item("groups", groupname, group_config)
 
         logger.info("Group '%s' created successfully.", groupname)
         return {"msg": f"Group '{groupname}' created successfully.", "state": self._state.get_data_copy()}
@@ -332,7 +361,7 @@ class SmbZfsManager:
         return {"msg": f"Group '{groupname}' deleted successfully.", "state": self._state.get_data_copy()}
 
     @requires_initialization
-    def create_share(self, name: str, dataset_path: str, owner: str, group: str, perms: str = "0775", comment: str = "", valid_users: Optional[str] = None, read_only: bool = False, browseable: bool = True, quota: Optional[str] = None, pool: Optional[str] = None) -> Dict[str, Any]:
+    def create_share(self, name: str, dataset_path: str, owner: str, group: str, perms: str = "0775", comment: str = "", valid_users: Optional[str] = None, read_only: bool = False, browseable: bool = True, quota: Optional[str] = None, pool: Optional[str] = None, use_existing: bool = False) -> Dict[str, Any]:
         """Creates a ZFS dataset and configures it as a Samba share."""
         logger.info(
             "Attempting to create share '%s' on dataset path '%s'.", name, dataset_path)
@@ -346,9 +375,9 @@ class SmbZfsManager:
             raise InvalidNameError(
                 f"Permissions '{perms}' are invalid. Must be 3 or 4 octal digits (e.g., 775 or 0775).")
         if not self._system.user_exists(owner):
-            raise StateItemNotFoundError("user", owner)
+            raise SystemItemNotFoundError("user", owner)
         if not self._system.group_exists(group):
-            raise StateItemNotFoundError("group", group)
+            raise SystemItemNotFoundError("group", group)
 
         primary_pool = self._state.get("primary_pool")
         secondary_pools = self._state.get("secondary_pools", [])
@@ -360,51 +389,63 @@ class SmbZfsManager:
 
         full_dataset = f"{target_pool}/{dataset_path}"
         with self._transaction() as rollback:
-            logger.info("Creating dataset '%s'.", full_dataset)
-            self._zfs.create_dataset(full_dataset)
-            rollback.append(lambda: self._zfs.destroy_dataset(full_dataset))
-
-            if quota:
-                self._validate_quota(quota)
-                self._zfs.set_quota(full_dataset, quota)
-
-            mount_point = self._zfs.get_mountpoint(full_dataset)
-            uid = pwd.getpwnam(owner).pw_uid
-            gid = grp.getgrnam(group).gr_gid
-            os.chown(mount_point, uid, gid)
-            os.chmod(mount_point, int(perms, 8))
-            logger.debug("Set permissions on mount point '%s'.", mount_point)
-
-            if valid_users:
-                for item in valid_users.replace(" ", "").split(','):
-                    item_name = item.lstrip('@')
-                    if '@' in item:
-                        if not self._system.group_exists(item_name):
-                            raise StateItemNotFoundError("group", item_name)
-                    else:
-                        if not self._system.user_exists(item_name):
-                            raise StateItemNotFoundError("user", item_name)
-
-            share_data = {
-                "dataset": {"name": full_dataset, "mount_point": mount_point, "quota": quota, "pool": target_pool},
-                "smb_config": {"comment": comment, "browseable": browseable, "read_only": read_only, "valid_users": valid_users or f"@{group}"},
-                "system": {"owner": owner, "group": group, "permissions": perms},
-                "created": datetime.utcnow().isoformat(),
-            }
-
-            logger.info("Adding share '%s' to Samba configuration.", name)
-            self._config.add_share_to_conf(name, share_data)
-
-            def samba_rollback():
-                self._config.remove_share_from_conf(name)
+            if use_existing:
+                # Only register the share in state and Samba, do not create dataset
+                mount_point = self._zfs.get_mountpoint(full_dataset)
+                share_data = {
+                    "dataset": {"name": full_dataset, "mount_point": mount_point, "quota": quota, "pool": target_pool},
+                    "smb_config": {"comment": comment, "browseable": browseable, "read_only": read_only, "valid_users": valid_users or f"@{group}"},
+                    "system": {"owner": owner, "group": group, "permissions": perms},
+                    "created": datetime.utcnow().isoformat(),
+                }
+                logger.info("Adding share '%s' to Samba configuration.", name)
+                self._config.add_share_to_conf(name, share_data)
+                def samba_rollback():
+                    self._config.remove_share_from_conf(name)
+                    self._system.test_samba_config()
+                    self._system.reload_samba()
+                rollback.append(samba_rollback)
                 self._system.test_samba_config()
                 self._system.reload_samba()
-            rollback.append(samba_rollback)
-
-            self._system.test_samba_config()
-            self._system.reload_samba()
-            self._state.set_item("shares", name, share_data)
-
+                self._state.set_item("shares", name, share_data)
+            else:
+                logger.info("Creating dataset '%s'.", full_dataset)
+                self._zfs.create_dataset(full_dataset)
+                rollback.append(lambda: self._zfs.destroy_dataset(full_dataset))
+                if quota:
+                    self._validate_quota(quota)
+                    self._zfs.set_quota(full_dataset, quota)
+                mount_point = self._zfs.get_mountpoint(full_dataset)
+                uid = pwd.getpwnam(owner).pw_uid
+                gid = grp.getgrnam(group).gr_gid
+                os.chown(mount_point, uid, gid)
+                os.chmod(mount_point, int(perms, 8))
+                logger.debug("Set permissions on mount point '%s'.", mount_point)
+                if valid_users:
+                    for item in valid_users.replace(" ", "").split(','):
+                        item_name = item.lstrip('@')
+                        if '@' in item:
+                            if not self._system.group_exists(item_name):
+                                raise StateItemNotFoundError("group", item_name)
+                        else:
+                            if not self._system.user_exists(item_name):
+                                raise StateItemNotFoundError("user", item_name)
+                share_data = {
+                    "dataset": {"name": full_dataset, "mount_point": mount_point, "quota": quota, "pool": target_pool},
+                    "smb_config": {"comment": comment, "browseable": browseable, "read_only": read_only, "valid_users": valid_users or f"@{group}"},
+                    "system": {"owner": owner, "group": group, "permissions": perms},
+                    "created": datetime.utcnow().isoformat(),
+                }
+                logger.info("Adding share '%s' to Samba configuration.", name)
+                self._config.add_share_to_conf(name, share_data)
+                def samba_rollback():
+                    self._config.remove_share_from_conf(name)
+                    self._system.test_samba_config()
+                    self._system.reload_samba()
+                rollback.append(samba_rollback)
+                self._system.test_samba_config()
+                self._system.reload_samba()
+                self._state.set_item("shares", name, share_data)
         logger.info("Share '%s' created successfully.", name)
         return {"msg": f"Share '{name}' created successfully.", "state": self._state.get_data_copy()}
 

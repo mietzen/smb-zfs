@@ -27,6 +27,13 @@ class ItemExistsError(SmbZfsError):
         super().__init__(self.message)
 
 
+class SystemItemNotFoundError(SmbZfsError):
+    """Raised when a system item (user, group) is not found."""
+
+    def __init__(self, item_type: str, item_id: str):
+        super().__init__(f"Error: System {item_type} '{item_id}' not found.")
+
+
 class StateItemNotFoundError(SmbZfsError):
     """Raised when an item (user, group, share) cannot be found."""
 
